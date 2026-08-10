@@ -4,14 +4,18 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.world.item.ItemStack;
 import org.techfield.tfmusic.TFMusic;
-import org.techfield.tfmusic.registry.ModItems;
+import org.techfield.tfmusic.music.MusicMedia;
+import org.techfield.tfmusic.music.MusicPlaylist;
+import org.techfield.tfmusic.music.MusicTrack;
+import org.techfield.tfmusic.music.PlaybackCursor;
+import org.techfield.tfmusic.music.PlaybackQueue;
 
 import java.util.UUID;
 
 public record PortableSpeakerData(
         UUID speakerId,
-        ItemStack disc,
-        long progressMs,
+        ItemStack media,
+        PlaybackCursor cursor,
         float speed,
         boolean playing,
         double radius
@@ -23,17 +27,33 @@ public record PortableSpeakerData(
 
     private static final String ROOT_TAG = TFMusic.MOD_ID + ":portable_speaker";
 
+    public PortableSpeakerData {
+        media = MusicMedia.normalize(media);
+        cursor = cursor == null ? PlaybackQueue.initial(media) : PlaybackQueue.synchronize(media, cursor);
+        speed = sanitizeSpeed(speed);
+        radius = sanitizeRadius(radius);
+        playing = playing && cursor.track() != null;
+    }
+
     public static PortableSpeakerData createDefault() {
-        return new PortableSpeakerData(UUID.randomUUID(), ItemStack.EMPTY, 0L, 1.0F, false, DEFAULT_RADIUS);
+        ItemStack media = ItemStack.EMPTY;
+        return new PortableSpeakerData(
+                UUID.randomUUID(),
+                media,
+                PlaybackQueue.initial(media),
+                1.0F,
+                false,
+                DEFAULT_RADIUS
+        );
     }
 
     public CompoundTag save() {
         CompoundTag tag = new CompoundTag();
         tag.putUUID("SpeakerId", speakerId);
-        if (!disc.isEmpty()) {
-            tag.put("Disc", disc.save(new CompoundTag()));
+        if (!media.isEmpty()) {
+            tag.put("Media", media.save(new CompoundTag()));
         }
-        tag.putLong("ProgressMs", Math.max(0L, progressMs));
+        tag.put("Cursor", cursor.save());
         tag.putFloat("Speed", sanitizeSpeed(speed));
         tag.putBoolean("Playing", playing);
         tag.putDouble("Radius", sanitizeRadius(radius));
@@ -41,32 +61,45 @@ public record PortableSpeakerData(
     }
 
     public static PortableSpeakerData load(ItemStack stack) {
-        CompoundTag root = stack.getOrCreateTag();
-        if (!root.contains(ROOT_TAG, CompoundTag.TAG_COMPOUND)) {
-            PortableSpeakerData created = createDefault();
-            created.write(stack);
-            return created;
+        CompoundTag root = stack.getTag();
+        if (root == null || !root.contains(ROOT_TAG, CompoundTag.TAG_COMPOUND)) {
+            return createDefault();
         }
 
         CompoundTag tag = root.getCompound(ROOT_TAG);
-        boolean needsMigration = !tag.hasUUID("SpeakerId")
-                || !tag.contains("ProgressMs", Tag.TAG_LONG)
-                || !tag.contains("Speed", Tag.TAG_FLOAT)
-                || !tag.contains("Playing", Tag.TAG_BYTE)
-                || !tag.contains("Radius", Tag.TAG_DOUBLE);
         UUID id = tag.hasUUID("SpeakerId") ? tag.getUUID("SpeakerId") : UUID.randomUUID();
-        ItemStack disc = tag.contains("Disc", CompoundTag.TAG_COMPOUND)
-                ? ItemStack.of(tag.getCompound("Disc"))
+        ItemStack media = tag.contains("Media", CompoundTag.TAG_COMPOUND)
+                ? ItemStack.of(tag.getCompound("Media"))
+                : tag.contains("Disc", CompoundTag.TAG_COMPOUND)
+                        ? ItemStack.of(tag.getCompound("Disc"))
                 : ItemStack.EMPTY;
+        media = MusicMedia.normalize(media);
+        PlaybackCursor cursor = tag.contains("Cursor", CompoundTag.TAG_COMPOUND)
+                ? PlaybackCursor.load(tag.getCompound("Cursor"), media)
+                : PlaybackQueue.initial(media).withProgress(
+                        tag.contains("ProgressMs", Tag.TAG_LONG) ? tag.getLong("ProgressMs") : 0L
+                );
         PortableSpeakerData loaded = new PortableSpeakerData(
                 id,
-                normalizeDisc(disc),
-                tag.contains("ProgressMs", Tag.TAG_LONG) ? Math.max(0L, tag.getLong("ProgressMs")) : 0L,
+                media,
+                cursor,
                 tag.contains("Speed", Tag.TAG_FLOAT) ? sanitizeSpeed(tag.getFloat("Speed")) : 1.0F,
                 tag.contains("Playing", Tag.TAG_BYTE) && tag.getBoolean("Playing"),
                 tag.contains("Radius", Tag.TAG_DOUBLE) ? sanitizeRadius(tag.getDouble("Radius")) : DEFAULT_RADIUS
         );
-        if (needsMigration || !loaded.save().equals(tag)) {
+        return loaded;
+    }
+
+    public static PortableSpeakerData getOrCreate(ItemStack stack) {
+        CompoundTag root = stack.getTag();
+        if (root == null || !root.contains(ROOT_TAG, CompoundTag.TAG_COMPOUND)) {
+            PortableSpeakerData created = createDefault();
+            created.write(stack);
+            return created;
+        }
+        PortableSpeakerData loaded = load(stack);
+        CompoundTag stored = root.getCompound(ROOT_TAG);
+        if (!loaded.save().equals(stored)) {
             loaded.write(stack);
         }
         return loaded;
@@ -76,19 +109,59 @@ public record PortableSpeakerData(
         stack.getOrCreateTag().put(ROOT_TAG, save());
     }
 
-    public PortableSpeakerData withDisc(ItemStack newDisc) {
-        return new PortableSpeakerData(speakerId, normalizeDisc(newDisc), 0L, speed, false, radius);
-    }
-
-    public PortableSpeakerData withPlayback(long newProgress, float newSpeed, boolean newPlaying) {
+    public PortableSpeakerData withMedia(ItemStack newMedia) {
+        ItemStack normalized = MusicMedia.normalize(newMedia);
         return new PortableSpeakerData(
                 speakerId,
-                disc,
-                Math.max(0L, newProgress),
+                normalized,
+                PlaybackQueue.initial(normalized),
+                speed,
+                false,
+                radius
+        );
+    }
+
+    public PortableSpeakerData withEditedMedia(ItemStack editedMedia) {
+        ItemStack normalized = MusicMedia.normalize(editedMedia);
+        PlaybackCursor synchronizedCursor = PlaybackQueue.synchronize(normalized, cursor);
+        MusicPlaylist playlist = MusicPlaylist.fromStack(normalized).orElse(null);
+        if (!playing
+                && playlist != null
+                && synchronizedCursor.entryId() != null
+                && playlist.indexOf(synchronizedCursor.entryId()) < 0) {
+            synchronizedCursor = PlaybackQueue.initial(normalized);
+        }
+        return new PortableSpeakerData(
+                speakerId,
+                normalized,
+                synchronizedCursor,
+                speed,
+                playing,
+                radius
+        );
+    }
+
+    public PortableSpeakerData withPlayback(PlaybackCursor newCursor, float newSpeed, boolean newPlaying) {
+        return new PortableSpeakerData(
+                speakerId,
+                media,
+                newCursor,
                 sanitizeSpeed(newSpeed),
                 newPlaying,
                 sanitizeRadius(radius)
         );
+    }
+
+    public PortableSpeakerData withPlayback(long newProgress, float newSpeed, boolean newPlaying) {
+        return withPlayback(cursor.withProgress(newProgress), newSpeed, newPlaying);
+    }
+
+    public long progressMs() {
+        return cursor.progressMs();
+    }
+
+    public MusicTrack currentTrack() {
+        return cursor.track();
     }
 
     public static float sanitizeSpeed(float value) {
@@ -105,12 +178,4 @@ public record PortableSpeakerData(
         return Math.min(MAX_RADIUS, value);
     }
 
-    private static ItemStack normalizeDisc(ItemStack stack) {
-        if (stack.isEmpty() || !stack.is(ModItems.MUSIC_DISC.get())) {
-            return ItemStack.EMPTY;
-        }
-        ItemStack copy = stack.copy();
-        copy.setCount(1);
-        return copy;
-    }
 }

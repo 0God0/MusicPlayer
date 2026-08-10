@@ -8,7 +8,9 @@ import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
 import org.techfield.tfmusic.client.audio.StreamingSoundInstance;
 import org.techfield.tfmusic.client.screen.BurnerScreen;
+import org.techfield.tfmusic.client.screen.PlaylistEditorScreen;
 import org.techfield.tfmusic.network.packet.BurnResultS2CPacket;
+import org.techfield.tfmusic.network.packet.PlaylistStateS2CPacket;
 import org.techfield.tfmusic.network.packet.SpeakerStartS2CPacket;
 import org.slf4j.Logger;
 
@@ -106,6 +108,13 @@ public final class ClientPlaybackManager {
                         .withStyle(packet.success() ? ChatFormatting.GREEN : ChatFormatting.RED),
                 false
         );
+    }
+
+    public static void handlePlaylistState(PlaylistStateS2CPacket packet) {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.screen instanceof PlaylistEditorScreen screen) {
+            screen.handlePlaylistState(packet);
+        }
     }
 
     public static void clear() {

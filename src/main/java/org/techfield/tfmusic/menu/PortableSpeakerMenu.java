@@ -10,7 +10,7 @@ import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
 import org.techfield.tfmusic.item.PortableSpeakerData;
 import org.techfield.tfmusic.item.PortableSpeakerItem;
-import org.techfield.tfmusic.registry.ModItems;
+import org.techfield.tfmusic.music.MusicMedia;
 import org.techfield.tfmusic.registry.ModMenus;
 
 import java.util.UUID;
@@ -20,7 +20,8 @@ public final class PortableSpeakerMenu extends AbstractContainerMenu {
     public static final int DISC_SLOT_X = 193;
     public static final int DISC_SLOT_Y = 43;
     public static final int PLAYER_INVENTORY_X = 34;
-    public static final int PLAYER_INVENTORY_Y = 134;
+    public static final int PLAYER_INVENTORY_Y = 160;
+    public static final int HOTBAR_OFFSET = 58;
     private static final int PLAYER_INVENTORY_START = 1;
     private static final int PLAYER_INVENTORY_END = PLAYER_INVENTORY_START + 27;
     private static final int HOTBAR_START = PLAYER_INVENTORY_END;
@@ -43,7 +44,7 @@ public final class PortableSpeakerMenu extends AbstractContainerMenu {
         addSlot(new Slot(speakerInventory, DISC_SLOT, DISC_SLOT_X, DISC_SLOT_Y) {
             @Override
             public boolean mayPlace(ItemStack stack) {
-                return stack.is(ModItems.MUSIC_DISC.get());
+                return MusicMedia.isSupported(stack);
             }
 
             @Override
@@ -60,7 +61,12 @@ public final class PortableSpeakerMenu extends AbstractContainerMenu {
 
     public PortableSpeakerData speakerData() {
         ItemStack stack = findSpeaker();
-        return stack == null ? PortableSpeakerData.createDefault() : PortableSpeakerData.load(stack);
+        if (stack == null) {
+            return PortableSpeakerData.createDefault();
+        }
+        return playerInventory.player.level().isClientSide
+                ? PortableSpeakerData.load(stack)
+                : PortableSpeakerData.getOrCreate(stack);
     }
 
     @Override
@@ -104,7 +110,7 @@ public final class PortableSpeakerMenu extends AbstractContainerMenu {
             }
         }
         for (int column = 0; column < 9; column++) {
-            addSlot(new Slot(inventory, column, x + column * 18, y + 58));
+            addSlot(new Slot(inventory, column, x + column * 18, y + HOTBAR_OFFSET));
         }
     }
 
@@ -114,6 +120,8 @@ public final class PortableSpeakerMenu extends AbstractContainerMenu {
     }
 
     private final class SpeakerContainer implements Container {
+        private ItemStack clientMedia = ItemStack.EMPTY;
+
         @Override
         public int getContainerSize() {
             return 1;
@@ -129,8 +137,11 @@ public final class PortableSpeakerMenu extends AbstractContainerMenu {
             if (slot != 0) {
                 return ItemStack.EMPTY;
             }
+            if (playerInventory.player.level().isClientSide) {
+                return clientMedia;
+            }
             ItemStack speaker = findSpeaker();
-            return speaker == null ? ItemStack.EMPTY : PortableSpeakerData.load(speaker).disc();
+            return speaker == null ? ItemStack.EMPTY : PortableSpeakerData.load(speaker).media().copy();
         }
 
         @Override
@@ -159,12 +170,15 @@ public final class PortableSpeakerMenu extends AbstractContainerMenu {
             if (slot != 0) {
                 return;
             }
+            if (playerInventory.player.level().isClientSide) {
+                clientMedia = MusicMedia.normalize(stack);
+                return;
+            }
             ItemStack speaker = findSpeaker();
             if (speaker == null) {
                 return;
             }
-            ItemStack normalized = stack.is(ModItems.MUSIC_DISC.get()) ? stack : ItemStack.EMPTY;
-            PortableSpeakerData.load(speaker).withDisc(normalized).write(speaker);
+            PortableSpeakerData.getOrCreate(speaker).withMedia(MusicMedia.normalize(stack)).write(speaker);
             setChanged();
         }
 

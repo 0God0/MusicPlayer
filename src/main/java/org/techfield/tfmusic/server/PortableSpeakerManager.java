@@ -11,7 +11,10 @@ import net.minecraftforge.fml.common.Mod;
 import org.techfield.tfmusic.TFMusic;
 import org.techfield.tfmusic.item.PortableSpeakerData;
 import org.techfield.tfmusic.item.PortableSpeakerItem;
+import org.techfield.tfmusic.music.MusicPlaylist;
 import org.techfield.tfmusic.music.MusicTrack;
+import org.techfield.tfmusic.music.PlaybackCursor;
+import org.techfield.tfmusic.music.PlaybackQueue;
 import org.techfield.tfmusic.network.packet.SpeakerControlC2SPacket;
 import org.techfield.tfmusic.server.sound.FollowPlayerSpeaker;
 
@@ -29,6 +32,7 @@ public final class PortableSpeakerManager {
     private static final int PROGRESS_SAVE_INTERVAL_TICKS = 20;
     private static final Map<UUID, FollowPlayerSpeaker> ACTIVE = new HashMap<>();
     private static final Map<UUID, ItemStack> ACTIVE_STACKS = new HashMap<>();
+    private static final Map<UUID, PendingPause> PENDING_PAUSES = new HashMap<>();
     private static int saveTicker;
 
     private PortableSpeakerManager() {
@@ -50,6 +54,7 @@ public final class PortableSpeakerManager {
     public static void onServerStopped(ServerStoppedEvent event) {
         ACTIVE.clear();
         ACTIVE_STACKS.clear();
+        PENDING_PAUSES.clear();
     }
 
     public static void handleControl(ServerPlayer player, SpeakerControlC2SPacket packet) {
@@ -57,8 +62,14 @@ public final class PortableSpeakerManager {
         if (stack == null) {
             return;
         }
-        PortableSpeakerData data = PortableSpeakerData.load(stack);
-        MusicTrack track = MusicTrack.fromDisc(data.disc()).orElse(null);
+        PortableSpeakerData data = PortableSpeakerData.getOrCreate(stack);
+        PENDING_PAUSES.remove(data.speakerId());
+        PlaybackCursor synchronizedCursor = PlaybackQueue.synchronize(data.media(), data.cursor());
+        if (!synchronizedCursor.equals(data.cursor())) {
+            data = data.withPlayback(synchronizedCursor, data.speed(), data.playing());
+            data.write(stack);
+        }
+        MusicTrack track = data.currentTrack();
         long duration = track == null ? 0L : track.durationMs();
 
         switch (packet.action()) {
@@ -77,7 +88,8 @@ public final class PortableSpeakerManager {
                     return;
                 }
                 long progress = clampProgress(data.progressMs(), duration);
-                PortableSpeakerData updated = data.withPlayback(progress, data.speed(), true);
+                PlaybackCursor cursor = data.cursor().withProgress(progress);
+                PortableSpeakerData updated = data.withPlayback(cursor, data.speed(), true);
                 updated.write(stack);
                 startOrReplace(player, stack, updated, track);
             }
@@ -88,7 +100,11 @@ public final class PortableSpeakerManager {
                 if (speaker != null) {
                     speaker.pauseAndNotify();
                 }
-                data.withPlayback(clampProgress(progress, duration), data.speed(), false).write(stack);
+                data.withPlayback(
+                        data.cursor().withProgress(clampProgress(progress, duration)),
+                        data.speed(),
+                        false
+                ).write(stack);
             }
             case STOP -> {
                 FollowPlayerSpeaker speaker = ACTIVE.remove(packet.speakerId());
@@ -96,14 +112,14 @@ public final class PortableSpeakerManager {
                 if (speaker != null) {
                     speaker.stopAndNotify();
                 }
-                data.withPlayback(0L, data.speed(), false).write(stack);
+                data.withPlayback(PlaybackQueue.initial(data.media()), data.speed(), false).write(stack);
             }
             case SEEK -> {
                 if (track == null) {
                     return;
                 }
                 long target = clampProgress(packet.seekMs(), duration);
-                data.withPlayback(target, data.speed(), data.playing()).write(stack);
+                data.withPlayback(data.cursor().withProgress(target), data.speed(), data.playing()).write(stack);
                 FollowPlayerSpeaker speaker = ACTIVE.get(packet.speakerId());
                 if (speaker != null) {
                     speaker.seek(target);
@@ -111,11 +127,26 @@ public final class PortableSpeakerManager {
             }
             case SPEED -> {
                 float speed = PortableSpeakerData.sanitizeSpeed(packet.speed());
-                data.withPlayback(data.progressMs(), speed, data.playing()).write(stack);
+                data.withPlayback(data.cursor(), speed, data.playing()).write(stack);
                 FollowPlayerSpeaker speaker = ACTIVE.get(packet.speakerId());
                 if (speaker != null) {
                     speaker.setSpeed(speed);
                 }
+            }
+            case NEXT -> changeTrack(player, stack, data, true);
+            case PREVIOUS -> changeTrack(player, stack, data, false);
+            case MODE -> {
+                MusicPlaylist playlist = MusicPlaylist.fromStack(data.media()).orElse(null);
+                if (playlist == null || packet.mode() == null) {
+                    return;
+                }
+                MusicPlaylist updatedPlaylist = playlist.withMode(packet.mode());
+                if (updatedPlaylist == playlist) {
+                    return;
+                }
+                ItemStack editedMedia = data.media().copy();
+                updatedPlaylist.write(editedMedia);
+                data.withEditedMedia(editedMedia).write(stack);
             }
         }
         player.getInventory().setChanged();
@@ -135,7 +166,13 @@ public final class PortableSpeakerManager {
                 UUID id = data.speakerId();
                 seen.add(id);
 
-                MusicTrack track = MusicTrack.fromDisc(data.disc()).orElse(null);
+                PlaybackCursor synchronizedCursor = PlaybackQueue.synchronize(data.media(), data.cursor());
+                if (!synchronizedCursor.equals(data.cursor())) {
+                    data = data.withPlayback(synchronizedCursor, data.speed(), data.playing());
+                    data.write(stack);
+                    player.getInventory().setChanged();
+                }
+                MusicTrack track = data.currentTrack();
                 if (!player.isAlive() || track == null) {
                     stopAndReset(stack, data);
                     continue;
@@ -159,7 +196,7 @@ public final class PortableSpeakerManager {
                     long currentProgress = speaker.captureProgress();
                     speaker.stopAndNotify();
                     ACTIVE.remove(id);
-                    data = data.withPlayback(currentProgress, data.speed(), true);
+                    data = data.withPlayback(data.cursor().withProgress(currentProgress), data.speed(), true);
                     data.write(stack);
                     speaker = null;
                 }
@@ -177,12 +214,28 @@ public final class PortableSpeakerManager {
                 if (!speaker.tick()) {
                     ACTIVE.remove(id);
                     ACTIVE_STACKS.remove(id);
-                    data.withPlayback(0L, data.speed(), false).write(stack);
+                    PlaybackQueue.AdvanceResult result = PlaybackQueue.advance(data.media(), data.cursor(), false);
+                    PortableSpeakerData advanced = data.withPlayback(
+                            result.cursor(),
+                            data.speed(),
+                            result.continuePlaying()
+                    );
+                    advanced.write(stack);
+                    if (result.continuePlaying() && advanced.currentTrack() != null) {
+                        FollowPlayerSpeaker next = createSpeaker(player, advanced, advanced.currentTrack());
+                        ACTIVE.put(id, next);
+                        ACTIVE_STACKS.put(id, stack);
+                        next.tick();
+                    }
                     player.getInventory().setChanged();
                     continue;
                 }
                 if (saveProgress) {
-                    data.withPlayback(speaker.progressMs(), speaker.speed(), true).write(stack);
+                    data.withPlayback(
+                            data.cursor().withProgress(speaker.progressMs()),
+                            speaker.speed(),
+                            true
+                    ).write(stack);
                     player.getInventory().setChanged();
                 }
                 ACTIVE_STACKS.put(id, stack);
@@ -197,11 +250,47 @@ public final class PortableSpeakerManager {
                 long progress = speaker.captureProgress();
                 speaker.pauseAndNotify();
                 if (trackedStack != null && PortableSpeakerItem.matches(trackedStack, entry.getKey())) {
-                    PortableSpeakerData data = PortableSpeakerData.load(trackedStack);
-                    data.withPlayback(progress, speaker.speed(), false).write(trackedStack);
+                    PortableSpeakerData data = PortableSpeakerData.getOrCreate(trackedStack);
+                    data.withPlayback(data.cursor().withProgress(progress), speaker.speed(), false).write(trackedStack);
+                } else {
+                    PENDING_PAUSES.put(entry.getKey(), new PendingPause(progress, speaker.speed()));
                 }
                 iterator.remove();
             }
+        }
+    }
+
+    private static void changeTrack(
+            ServerPlayer player,
+            ItemStack stack,
+            PortableSpeakerData data,
+            boolean next
+    ) {
+        FollowPlayerSpeaker speaker = ACTIVE.remove(data.speakerId());
+        ACTIVE_STACKS.remove(data.speakerId());
+        long progress = speaker == null ? data.progressMs() : speaker.captureProgress();
+        if (speaker != null) {
+            speaker.stopAndNotify();
+        }
+
+        PlaybackCursor current = data.cursor().withProgress(progress);
+        PlaybackCursor target;
+        boolean canContinue = true;
+        if (next) {
+            PlaybackQueue.AdvanceResult result = PlaybackQueue.advance(data.media(), current, true);
+            target = result.cursor();
+            canContinue = result.continuePlaying();
+        } else if (progress > 3_000L) {
+            target = current.withProgress(0L);
+        } else {
+            target = PlaybackQueue.previous(data.media(), current);
+        }
+
+        boolean playing = data.playing() && canContinue && target.track() != null;
+        PortableSpeakerData updated = data.withPlayback(target, data.speed(), playing);
+        updated.write(stack);
+        if (playing) {
+            startOrReplace(player, stack, updated, target.track());
         }
     }
 
@@ -253,7 +342,16 @@ public final class PortableSpeakerManager {
     }
 
     private static PortableSpeakerData ensureUniqueId(ItemStack stack, Set<UUID> usedIds) {
-        PortableSpeakerData data = PortableSpeakerData.load(stack);
+        PortableSpeakerData data = PortableSpeakerData.getOrCreate(stack);
+        PendingPause pendingPause = PENDING_PAUSES.remove(data.speakerId());
+        if (pendingPause != null) {
+            data = data.withPlayback(
+                    data.cursor().withProgress(pendingPause.progressMs()),
+                    pendingPause.speed(),
+                    false
+            );
+            data.write(stack);
+        }
         if (usedIds.add(data.speakerId())) {
             return data;
         }
@@ -264,8 +362,8 @@ public final class PortableSpeakerManager {
         }
         PortableSpeakerData replaced = new PortableSpeakerData(
                 UUID.randomUUID(),
-                data.disc(),
-                0L,
+                data.media(),
+                PlaybackQueue.initial(data.media()),
                 data.speed(),
                 false,
                 data.radius()
@@ -281,8 +379,9 @@ public final class PortableSpeakerManager {
         if (old != null) {
             old.stopAndNotify();
         }
-        if (data.playing() || data.progressMs() != 0L) {
-            data.withPlayback(0L, data.speed(), false).write(stack);
+        PlaybackCursor initial = PlaybackQueue.initial(data.media());
+        if (data.playing() || !data.cursor().equals(initial)) {
+            data.withPlayback(initial, data.speed(), false).write(stack);
         }
     }
 
@@ -296,12 +395,15 @@ public final class PortableSpeakerManager {
             ItemStack stack = ACTIVE_STACKS.get(entry.getKey());
             long progress = speaker.captureProgress();
             if (stack != null && PortableSpeakerItem.matches(stack, entry.getKey())) {
-                PortableSpeakerData data = PortableSpeakerData.load(stack);
-                data.withPlayback(progress, speaker.speed(), true).write(stack);
+                PortableSpeakerData data = PortableSpeakerData.getOrCreate(stack);
+                data.withPlayback(data.cursor().withProgress(progress), speaker.speed(), true).write(stack);
             }
             speaker.stopAndNotify();
         }
         ACTIVE.clear();
         ACTIVE_STACKS.clear();
+    }
+
+    private record PendingPause(long progressMs, float speed) {
     }
 }

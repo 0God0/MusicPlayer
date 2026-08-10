@@ -15,9 +15,12 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import org.jetbrains.annotations.Nullable;
 import org.techfield.tfmusic.block.MusicPlayerBlock;
+import org.techfield.tfmusic.music.MusicMedia;
+import org.techfield.tfmusic.music.MusicPlaylist;
 import org.techfield.tfmusic.music.MusicTrack;
+import org.techfield.tfmusic.music.PlaybackCursor;
+import org.techfield.tfmusic.music.PlaybackQueue;
 import org.techfield.tfmusic.registry.ModBlockEntities;
-import org.techfield.tfmusic.registry.ModItems;
 import org.techfield.tfmusic.server.sound.RangeServerSpeaker;
 
 import java.nio.charset.StandardCharsets;
@@ -27,10 +30,10 @@ public final class MusicPlayerBlockEntity extends BlockEntity {
     public static final int SAMPLE_RATE = 44_100;
     public static final double DEFAULT_RADIUS = 64.0D;
 
-    private ItemStack disc = ItemStack.EMPTY;
+    private ItemStack media = ItemStack.EMPTY;
     private UUID speakerId = UUID.randomUUID();
     private boolean playing;
-    private long progressMs;
+    private PlaybackCursor cursor = PlaybackQueue.initial(ItemStack.EMPTY);
     private float speed = 1.0F;
     private double radius = DEFAULT_RADIUS;
     private int saveTicker;
@@ -47,38 +50,30 @@ public final class MusicPlayerBlockEntity extends BlockEntity {
         blockEntity.tickPlayback();
     }
 
-    public boolean insertDisc(ItemStack sourceStack) {
-        if (!disc.isEmpty() || !sourceStack.is(ModItems.MUSIC_DISC.get())) {
+    public boolean insertMedia(ItemStack sourceStack) {
+        if (!media.isEmpty() || !MusicMedia.isSupported(sourceStack)) {
             return false;
         }
-        MusicTrack track = MusicTrack.fromDisc(sourceStack).orElse(null);
+        ItemStack inserted = MusicMedia.normalize(sourceStack);
+        PlaybackCursor insertedCursor = PlaybackQueue.initial(inserted);
+        MusicTrack track = insertedCursor.track();
         if (track == null) {
             return false;
         }
 
-        disc = sourceStack.copy();
-        disc.setCount(1);
+        media = inserted;
         sourceStack.shrink(1);
         if (level instanceof ServerLevel serverLevel) {
             speakerId = stableSpeakerId(serverLevel);
         } else {
             speakerId = UUID.randomUUID();
         }
-        progressMs = 0L;
+        cursor = insertedCursor;
         speed = 1.0F;
         playing = true;
         speaker = null;
         if (level instanceof ServerLevel serverLevel) {
-            speaker = new RangeServerSpeaker(
-                    speakerId,
-                    SAMPLE_RATE,
-                    track,
-                    progressMs,
-                    speed,
-                    radius,
-                    serverLevel,
-                    worldPosition
-            );
+            speaker = createSpeaker(serverLevel, track);
             speaker.tick();
         }
         updateBlockState(true);
@@ -86,15 +81,15 @@ public final class MusicPlayerBlockEntity extends BlockEntity {
         return true;
     }
 
-    public ItemStack ejectDisc() {
+    public ItemStack ejectMedia() {
         if (speaker != null) {
             speaker.stopAndNotify();
             speaker = null;
         }
-        ItemStack result = disc;
-        disc = ItemStack.EMPTY;
+        ItemStack result = media;
+        media = ItemStack.EMPTY;
         playing = false;
-        progressMs = 0L;
+        cursor = PlaybackQueue.initial(ItemStack.EMPTY);
         updateBlockState(false);
         setChangedAndSync();
         if (!result.isEmpty() && level instanceof ServerLevel serverLevel) {
@@ -109,16 +104,27 @@ public final class MusicPlayerBlockEntity extends BlockEntity {
         return result;
     }
 
-    public void dropDisc() {
-        ejectDisc();
+    public void dropMedia() {
+        ejectMedia();
     }
 
     public boolean isPlaying() {
         return playing;
     }
 
-    public ItemStack getDisc() {
-        return disc.copy();
+    public ItemStack getMedia() {
+        return media.copy();
+    }
+
+    public boolean updatePlaylist(MusicPlaylist playlist) {
+        MusicPlaylist current = MusicPlaylist.fromStack(media).orElse(null);
+        if (current == null || !current.id().equals(playlist.id()) || playlist.validate() != null) {
+            return false;
+        }
+        playlist.write(media);
+        cursor = PlaybackQueue.synchronize(media, cursor);
+        setChangedAndSync();
+        return true;
     }
 
     public UUID getSpeakerId() {
@@ -126,7 +132,7 @@ public final class MusicPlayerBlockEntity extends BlockEntity {
     }
 
     public long getProgressMs() {
-        return progressMs;
+        return cursor.progressMs();
     }
 
     public float getSpeed() {
@@ -141,14 +147,14 @@ public final class MusicPlayerBlockEntity extends BlockEntity {
     protected void saveAdditional(CompoundTag tag) {
         super.saveAdditional(tag);
         if (speaker != null && speaker.isWorking()) {
-            progressMs = speaker.captureProgress();
+            cursor = cursor.withProgress(speaker.captureProgress());
         }
-        if (!disc.isEmpty()) {
-            tag.put("Disc", disc.save(new CompoundTag()));
+        if (!media.isEmpty()) {
+            tag.put("Media", media.save(new CompoundTag()));
         }
         tag.putUUID("SpeakerId", speakerId);
         tag.putBoolean("Playing", playing);
-        tag.putLong("ProgressMs", Math.max(0L, progressMs));
+        tag.put("Cursor", cursor.save());
         tag.putFloat("Speed", speed);
         tag.putDouble("Radius", radius);
     }
@@ -156,17 +162,17 @@ public final class MusicPlayerBlockEntity extends BlockEntity {
     @Override
     public void load(CompoundTag tag) {
         super.load(tag);
-        disc = tag.contains("Disc", CompoundTag.TAG_COMPOUND)
-                ? ItemStack.of(tag.getCompound("Disc"))
+        media = tag.contains("Media", CompoundTag.TAG_COMPOUND)
+                ? ItemStack.of(tag.getCompound("Media"))
+                : tag.contains("Disc", CompoundTag.TAG_COMPOUND)
+                        ? ItemStack.of(tag.getCompound("Disc"))
                 : ItemStack.EMPTY;
-        if (!disc.is(ModItems.MUSIC_DISC.get()) || MusicTrack.fromDisc(disc).isEmpty()) {
-            disc = ItemStack.EMPTY;
-        } else {
-            disc.setCount(1);
-        }
+        media = MusicMedia.normalize(media);
         speakerId = tag.hasUUID("SpeakerId") ? tag.getUUID("SpeakerId") : UUID.randomUUID();
-        playing = tag.getBoolean("Playing") && MusicTrack.fromDisc(disc).isPresent();
-        progressMs = Math.max(0L, tag.getLong("ProgressMs"));
+        cursor = tag.contains("Cursor", CompoundTag.TAG_COMPOUND)
+                ? PlaybackCursor.load(tag.getCompound("Cursor"), media)
+                : PlaybackQueue.initial(media).withProgress(tag.getLong("ProgressMs"));
+        playing = tag.getBoolean("Playing") && cursor.track() != null;
         speed = sanitizeSpeed(tag.getFloat("Speed"));
         radius = sanitizeRadius(tag.getDouble("Radius"));
         speaker = null;
@@ -175,13 +181,13 @@ public final class MusicPlayerBlockEntity extends BlockEntity {
     @Override
     public void onLoad() {
         super.onLoad();
-        updateBlockState(!disc.isEmpty());
+        updateBlockState(!media.isEmpty());
     }
 
     @Override
     public void setRemoved() {
         if (speaker != null) {
-            progressMs = speaker.captureProgress();
+            cursor = cursor.withProgress(speaker.captureProgress());
             speaker.detach();
             speaker = null;
             setChanged();
@@ -209,6 +215,7 @@ public final class MusicPlayerBlockEntity extends BlockEntity {
     }
 
     private void tickPlayback() {
+        cursor = PlaybackQueue.synchronize(media, cursor);
         if (!playing) {
             if (speaker != null) {
                 speaker.stopAndNotify();
@@ -216,10 +223,10 @@ public final class MusicPlayerBlockEntity extends BlockEntity {
             }
             return;
         }
-        MusicTrack track = MusicTrack.fromDisc(disc).orElse(null);
+        MusicTrack track = cursor.track();
         if (track == null) {
             playing = false;
-            progressMs = 0L;
+            cursor = PlaybackQueue.initial(media);
             setChangedAndSync();
             return;
         }
@@ -240,26 +247,23 @@ public final class MusicPlayerBlockEntity extends BlockEntity {
             if (speaker != null) {
                 speaker.stopAndNotify();
             }
-            speaker = new RangeServerSpeaker(
-                    speakerId,
-                    SAMPLE_RATE,
-                    track,
-                    progressMs,
-                    speed,
-                    radius,
-                    serverLevel,
-                    worldPosition
-            );
+            speaker = createSpeaker(serverLevel, track);
         }
 
         if (!speaker.tick()) {
-            progressMs = 0L;
-            playing = false;
             speaker = null;
-            setChangedAndSync();
+            PlaybackQueue.AdvanceResult result = PlaybackQueue.advance(media, cursor, false);
+            cursor = result.cursor();
+            playing = result.continuePlaying();
+            if (playing && cursor.track() != null) {
+                speaker = createSpeaker(serverLevel, cursor.track());
+                speaker.tick();
+            } else {
+                setChangedAndSync();
+            }
             return;
         }
-        progressMs = speaker.progressMs();
+        cursor = cursor.withProgress(speaker.progressMs());
         if (++saveTicker >= 20) {
             saveTicker = 0;
             setChanged();
@@ -283,6 +287,19 @@ public final class MusicPlayerBlockEntity extends BlockEntity {
             level.sendBlockUpdated(worldPosition, state, state, Block.UPDATE_CLIENTS);
             level.updateNeighbourForOutputSignal(worldPosition, state.getBlock());
         }
+    }
+
+    private RangeServerSpeaker createSpeaker(ServerLevel serverLevel, MusicTrack track) {
+        return new RangeServerSpeaker(
+                speakerId,
+                SAMPLE_RATE,
+                track,
+                cursor.progressMs(),
+                speed,
+                radius,
+                serverLevel,
+                worldPosition
+        );
     }
 
     private static float sanitizeSpeed(float value) {

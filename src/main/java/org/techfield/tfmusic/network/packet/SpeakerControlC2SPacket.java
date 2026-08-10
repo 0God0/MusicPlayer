@@ -3,18 +3,32 @@ package org.techfield.tfmusic.network.packet;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkEvent;
+import org.techfield.tfmusic.music.PlaybackMode;
 import org.techfield.tfmusic.server.PortableSpeakerManager;
 
 import java.util.UUID;
 import java.util.function.Supplier;
 
-public record SpeakerControlC2SPacket(UUID speakerId, Action action, long seekMs, float speed) {
+public record SpeakerControlC2SPacket(
+        UUID speakerId,
+        Action action,
+        long seekMs,
+        float speed,
+        PlaybackMode mode
+) {
     public enum Action {
         PLAY,
         PAUSE,
         STOP,
         SEEK,
-        SPEED
+        SPEED,
+        NEXT,
+        PREVIOUS,
+        MODE
+    }
+
+    public SpeakerControlC2SPacket(UUID speakerId, Action action, long seekMs, float speed) {
+        this(speakerId, action, seekMs, speed, null);
     }
 
     public static void encode(SpeakerControlC2SPacket packet, FriendlyByteBuf buffer) {
@@ -22,6 +36,10 @@ public record SpeakerControlC2SPacket(UUID speakerId, Action action, long seekMs
         buffer.writeEnum(packet.action);
         buffer.writeLong(packet.seekMs);
         buffer.writeFloat(packet.speed);
+        buffer.writeBoolean(packet.mode != null);
+        if (packet.mode != null) {
+            buffer.writeEnum(packet.mode);
+        }
     }
 
     public static SpeakerControlC2SPacket decode(FriendlyByteBuf buffer) {
@@ -29,7 +47,8 @@ public record SpeakerControlC2SPacket(UUID speakerId, Action action, long seekMs
                 buffer.readUUID(),
                 buffer.readEnum(Action.class),
                 buffer.readLong(),
-                buffer.readFloat()
+                buffer.readFloat(),
+                buffer.readBoolean() ? buffer.readEnum(PlaybackMode.class) : null
         );
     }
 

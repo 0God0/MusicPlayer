@@ -15,6 +15,7 @@ import net.minecraft.world.level.Level;
 import net.minecraftforge.network.NetworkHooks;
 import org.jetbrains.annotations.Nullable;
 import org.techfield.tfmusic.menu.PortableSpeakerMenu;
+import org.techfield.tfmusic.music.MusicPlaylist;
 import org.techfield.tfmusic.music.MusicTrack;
 import org.techfield.tfmusic.registry.ModItems;
 import org.techfield.tfmusic.util.TimeUtil;
@@ -32,7 +33,7 @@ public final class PortableSpeakerItem extends Item {
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
         ItemStack stack = player.getItemInHand(hand);
         if (player instanceof ServerPlayer serverPlayer) {
-            PortableSpeakerData data = PortableSpeakerData.load(stack);
+            PortableSpeakerData data = PortableSpeakerData.getOrCreate(stack);
             NetworkHooks.openScreen(
                     serverPlayer,
                     new SimpleMenuProvider(
@@ -51,20 +52,39 @@ public final class PortableSpeakerItem extends Item {
             ItemStack stack,
             @Nullable Level level,
             List<Component> tooltip,
-            TooltipFlag flag
+        TooltipFlag flag
     ) {
         PortableSpeakerData data = PortableSpeakerData.load(stack);
-        MusicTrack.fromDisc(data.disc()).ifPresentOrElse(track -> {
-            tooltip.add(Component.translatable("tooltip.tf_music.loaded_disc", track.name())
+        MusicTrack track = data.currentTrack();
+        MusicPlaylist playlist = MusicPlaylist.fromStack(data.media()).orElse(null);
+        if (playlist != null) {
+            Component name = playlist.name().isBlank()
+                    ? Component.translatable("item.tf_music.music_playlist.unnamed")
+                    : Component.literal(playlist.name());
+            tooltip.add(Component.translatable(
+                            "tooltip.tf_music.loaded_playlist",
+                            name,
+                            playlist.entries().size())
                     .withStyle(ChatFormatting.AQUA));
+        }
+        if (track != null) {
+            if (playlist == null) {
+                tooltip.add(Component.translatable("tooltip.tf_music.loaded_disc", track.name())
+                        .withStyle(ChatFormatting.AQUA));
+            } else {
+                tooltip.add(Component.translatable("tooltip.tf_music.current_track", track.name())
+                        .withStyle(ChatFormatting.GRAY));
+            }
             long progress = Math.min(data.progressMs(), track.durationMs());
             tooltip.add(Component.translatable(
                             "tooltip.tf_music.progress",
                             TimeUtil.format(progress),
                             TimeUtil.format(track.durationMs()))
                     .withStyle(ChatFormatting.GREEN));
-        }, () -> tooltip.add(Component.translatable("tooltip.tf_music.no_disc")
-                .withStyle(ChatFormatting.DARK_GRAY)));
+        } else {
+            tooltip.add(Component.translatable("tooltip.tf_music.no_media")
+                    .withStyle(ChatFormatting.DARK_GRAY));
+        }
         tooltip.add(Component.translatable(
                         "tooltip.tf_music.speed",
                         String.format(Locale.ROOT, "%.1fx", data.speed()))

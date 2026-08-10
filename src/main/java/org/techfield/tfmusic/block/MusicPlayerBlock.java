@@ -1,6 +1,7 @@
 package org.techfield.tfmusic.block;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
@@ -20,8 +21,10 @@ import net.minecraft.world.level.block.state.properties.BooleanProperty;
 import net.minecraft.world.phys.BlockHitResult;
 import org.jetbrains.annotations.Nullable;
 import org.techfield.tfmusic.block.entity.MusicPlayerBlockEntity;
+import org.techfield.tfmusic.menu.PlaylistEditorMenu;
+import org.techfield.tfmusic.menu.PlaylistEditorTarget;
+import org.techfield.tfmusic.music.MusicMedia;
 import org.techfield.tfmusic.registry.ModBlockEntities;
-import org.techfield.tfmusic.registry.ModItems;
 
 public final class MusicPlayerBlock extends BaseEntityBlock {
     public static final BooleanProperty HAS_DISC = BlockStateProperties.HAS_RECORD;
@@ -46,16 +49,22 @@ public final class MusicPlayerBlock extends BaseEntityBlock {
 
         ItemStack held = player.getItemInHand(hand);
         if (level.isClientSide) {
-            return state.getValue(HAS_DISC) || held.is(ModItems.MUSIC_DISC.get())
+            return state.getValue(HAS_DISC) || MusicMedia.isSupported(held)
                     ? InteractionResult.SUCCESS
                     : InteractionResult.PASS;
         }
 
         if (state.getValue(HAS_DISC)) {
-            playerBlockEntity.ejectDisc();
+            if (player.isShiftKeyDown()
+                    && MusicMedia.isPlaylist(playerBlockEntity.getMedia())
+                    && player instanceof ServerPlayer serverPlayer) {
+                PlaylistEditorMenu.open(serverPlayer, PlaylistEditorTarget.block(pos));
+                return InteractionResult.CONSUME;
+            }
+            playerBlockEntity.ejectMedia();
             return InteractionResult.CONSUME;
         }
-        if (held.is(ModItems.MUSIC_DISC.get()) && playerBlockEntity.insertDisc(held)) {
+        if (MusicMedia.isSupported(held) && playerBlockEntity.insertMedia(held)) {
             return InteractionResult.CONSUME;
         }
         return InteractionResult.PASS;
@@ -64,7 +73,7 @@ public final class MusicPlayerBlock extends BaseEntityBlock {
     @Override
     public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean moving) {
         if (!state.is(newState.getBlock()) && level.getBlockEntity(pos) instanceof MusicPlayerBlockEntity blockEntity) {
-            blockEntity.dropDisc();
+            blockEntity.dropMedia();
         }
         super.onRemove(state, level, pos, newState, moving);
     }

@@ -9,13 +9,16 @@ import net.minecraftforge.network.simple.SimpleChannel;
 import org.techfield.tfmusic.TFMusic;
 import org.techfield.tfmusic.network.packet.BurnResultS2CPacket;
 import org.techfield.tfmusic.network.packet.BurnTrackC2SPacket;
+import org.techfield.tfmusic.network.packet.OpenSpeakerPlaylistEditorC2SPacket;
+import org.techfield.tfmusic.network.packet.PlaylistEditC2SPacket;
+import org.techfield.tfmusic.network.packet.PlaylistStateS2CPacket;
 import org.techfield.tfmusic.network.packet.SpeakerControlC2SPacket;
 import org.techfield.tfmusic.network.packet.SpeakerPauseS2CPacket;
 import org.techfield.tfmusic.network.packet.SpeakerStartS2CPacket;
 import org.techfield.tfmusic.network.packet.SpeakerStopS2CPacket;
 
 public final class ModNetwork {
-    private static final String PROTOCOL = "1";
+    private static final String PROTOCOL = "3";
     private static int nextPacketId;
 
     public static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
@@ -58,6 +61,21 @@ public final class ModNetwork {
                 .encoder(BurnResultS2CPacket::encode)
                 .decoder(BurnResultS2CPacket::decode)
                 .consumerMainThread(BurnResultS2CPacket::handle)
+                .add();
+        CHANNEL.messageBuilder(PlaylistEditC2SPacket.class, nextPacketId++, NetworkDirection.PLAY_TO_SERVER)
+                .encoder(PlaylistEditC2SPacket::encode)
+                .decoder(PlaylistEditC2SPacket::decode)
+                .consumerMainThread(PlaylistEditC2SPacket::handle)
+                .add();
+        CHANNEL.messageBuilder(PlaylistStateS2CPacket.class, nextPacketId++, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(PlaylistStateS2CPacket::encode)
+                .decoder(PlaylistStateS2CPacket::decode)
+                .consumerMainThread(PlaylistStateS2CPacket::handle)
+                .add();
+        CHANNEL.messageBuilder(OpenSpeakerPlaylistEditorC2SPacket.class, nextPacketId++, NetworkDirection.PLAY_TO_SERVER)
+                .encoder(OpenSpeakerPlaylistEditorC2SPacket::encode)
+                .decoder(OpenSpeakerPlaylistEditorC2SPacket::decode)
+                .consumerMainThread(OpenSpeakerPlaylistEditorC2SPacket::handle)
                 .add();
     }
 

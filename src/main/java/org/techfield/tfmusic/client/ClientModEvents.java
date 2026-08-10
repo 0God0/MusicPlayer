@@ -7,6 +7,7 @@ import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 import org.techfield.tfmusic.TFMusic;
 import org.techfield.tfmusic.client.screen.BurnerScreen;
+import org.techfield.tfmusic.client.screen.PlaylistEditorScreen;
 import org.techfield.tfmusic.client.screen.PortableSpeakerScreen;
 import org.techfield.tfmusic.registry.ModMenus;
 
@@ -20,6 +21,7 @@ public final class ClientModEvents {
         event.enqueueWork(() -> {
             MenuScreens.register(ModMenus.BURNER.get(), BurnerScreen::new);
             MenuScreens.register(ModMenus.PORTABLE_SPEAKER.get(), PortableSpeakerScreen::new);
+            MenuScreens.register(ModMenus.PLAYLIST_EDITOR.get(), PlaylistEditorScreen::new);
         });
     }
 }

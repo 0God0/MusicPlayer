@@ -8,6 +8,7 @@ import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.registries.RegistryObject;
 import org.techfield.tfmusic.TFMusic;
 import org.techfield.tfmusic.menu.BurnerMenu;
+import org.techfield.tfmusic.menu.PlaylistEditorMenu;
 import org.techfield.tfmusic.menu.PortableSpeakerMenu;
 
 public final class ModMenus {
@@ -21,6 +22,10 @@ public final class ModMenus {
     public static final RegistryObject<MenuType<PortableSpeakerMenu>> PORTABLE_SPEAKER = MENUS.register(
             "portable_speaker",
             () -> IForgeMenuType.create(PortableSpeakerMenu::new)
+    );
+    public static final RegistryObject<MenuType<PlaylistEditorMenu>> PLAYLIST_EDITOR = MENUS.register(
+            "playlist_editor",
+            () -> IForgeMenuType.create(PlaylistEditorMenu::new)
     );
 
     private ModMenus() {

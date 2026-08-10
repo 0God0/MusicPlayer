@@ -12,6 +12,7 @@ import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.registries.RegistryObject;
 import org.techfield.tfmusic.TFMusic;
 import org.techfield.tfmusic.item.MusicDiscItem;
+import org.techfield.tfmusic.item.MusicPlaylistItem;
 import org.techfield.tfmusic.item.PortableSpeakerItem;
 
 public final class ModItems {
@@ -32,6 +33,10 @@ public final class ModItems {
             "music_disc",
             () -> new MusicDiscItem(new Item.Properties().stacksTo(1))
     );
+    public static final RegistryObject<MusicPlaylistItem> MUSIC_PLAYLIST = ITEMS.register(
+            "music_playlist",
+            () -> new MusicPlaylistItem(new Item.Properties().stacksTo(1))
+    );
     public static final RegistryObject<PortableSpeakerItem> PORTABLE_SPEAKER = ITEMS.register(
             "portable_speaker",
             () -> new PortableSpeakerItem(new Item.Properties().stacksTo(1))
@@ -46,6 +51,7 @@ public final class ModItems {
                         output.accept(MUSIC_PLAYER.get());
                         output.accept(MUSIC_BURNER.get());
                         output.accept(MUSIC_DISC.get());
+                        output.accept(MUSIC_PLAYLIST.get());
                         output.accept(PORTABLE_SPEAKER.get());
                     })
                     .build()
