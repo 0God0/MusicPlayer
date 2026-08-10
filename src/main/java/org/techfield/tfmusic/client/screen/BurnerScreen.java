@@ -19,6 +19,24 @@ import org.techfield.tfmusic.registry.ModItems;
 import java.util.concurrent.CompletableFuture;
 
 public final class BurnerScreen extends AbstractContainerScreen<BurnerMenu> {
+    private static final int FORM_X = 8;
+    private static final int FORM_WIDTH = 158;
+    private static final int SOURCE_DIRECT_X = 8;
+    private static final int SOURCE_BILIBILI_X = 82;
+    private static final int SOURCE_Y = 22;
+    private static final int SOURCE_WIDTH = 70;
+    private static final int SOURCE_HEIGHT = 20;
+    private static final int NAME_INPUT_Y = 47;
+    private static final int LOCATOR_INPUT_Y = 69;
+    private static final int PAGE_INPUT_Y = 91;
+    private static final int BURN_BUTTON_X = 62;
+    private static final int BURN_BUTTON_Y = 91;
+    private static final int BURN_BUTTON_WIDTH = 70;
+    private static final int STATUS_X = 8;
+    private static final int STATUS_Y = 114;
+    private static final int STATUS_WIDTH = 158;
+    private static final int CONTENT_DIVIDER_Y = 124;
+
     private MusicSource selectedSource = MusicSource.DIRECT_LINK;
     private EditBox nameInput;
     private EditBox locatorInput;
@@ -33,12 +51,12 @@ public final class BurnerScreen extends AbstractContainerScreen<BurnerMenu> {
 
     public BurnerScreen(BurnerMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title);
-        imageWidth = 286;
-        imageHeight = 222;
-        titleLabelX = 12;
-        titleLabelY = 7;
-        inventoryLabelX = 62;
-        inventoryLabelY = 130;
+        imageWidth = 230;
+        imageHeight = 218;
+        titleLabelX = FORM_X;
+        titleLabelY = 6;
+        inventoryLabelX = BurnerMenu.PLAYER_INVENTORY_X;
+        inventoryLabelY = 128;
     }
 
     @Override
@@ -48,31 +66,50 @@ public final class BurnerScreen extends AbstractContainerScreen<BurnerMenu> {
         String previousPage = pageInput == null ? "1" : pageInput.getValue();
         super.init();
 
-        int formX = leftPos + 12;
-        int formWidth = 210;
         directButton = addRenderableWidget(Button.builder(
                         Component.translatable("source.tf_music.direct_link"),
                         button -> selectSource(MusicSource.DIRECT_LINK))
-                .bounds(formX, topPos + 21, 102, 20)
+                .bounds(leftPos + SOURCE_DIRECT_X, topPos + SOURCE_Y, SOURCE_WIDTH, SOURCE_HEIGHT)
                 .build());
         bilibiliButton = addRenderableWidget(Button.builder(
                         Component.translatable("source.tf_music.bilibili"),
                         button -> selectSource(MusicSource.BILIBILI))
-                .bounds(formX + 108, topPos + 21, 102, 20)
+                .bounds(leftPos + SOURCE_BILIBILI_X, topPos + SOURCE_Y, SOURCE_WIDTH, SOURCE_HEIGHT)
                 .build());
 
-        nameInput = new EditBox(font, formX, topPos + 52, formWidth, 18, Component.translatable("field.tf_music.track_name"));
+        nameInput = new EditBox(
+                font,
+                leftPos + FORM_X,
+                topPos + NAME_INPUT_Y,
+                FORM_WIDTH,
+                18,
+                Component.translatable("field.tf_music.track_name")
+        );
         nameInput.setMaxLength(MusicTrack.MAX_NAME_LENGTH);
         nameInput.setHint(Component.translatable("field.tf_music.track_name"));
         nameInput.setValue(previousName);
         addRenderableWidget(nameInput);
 
-        locatorInput = new EditBox(font, formX, topPos + 78, formWidth, 18, Component.translatable("field.tf_music.locator"));
+        locatorInput = new EditBox(
+                font,
+                leftPos + FORM_X,
+                topPos + LOCATOR_INPUT_Y,
+                FORM_WIDTH,
+                18,
+                Component.translatable("field.tf_music.locator")
+        );
         locatorInput.setMaxLength(MusicTrack.MAX_LOCATOR_LENGTH);
         locatorInput.setValue(previousLocator);
         addRenderableWidget(locatorInput);
 
-        pageInput = new EditBox(font, formX, topPos + 104, 64, 18, Component.translatable("field.tf_music.page"));
+        pageInput = new EditBox(
+                font,
+                leftPos + FORM_X,
+                topPos + PAGE_INPUT_Y,
+                50,
+                18,
+                Component.translatable("field.tf_music.page")
+        );
         pageInput.setMaxLength(3);
         pageInput.setFilter(value -> value.isEmpty() || value.chars().allMatch(Character::isDigit));
         pageInput.setHint(Component.translatable("field.tf_music.page"));
@@ -82,7 +119,7 @@ public final class BurnerScreen extends AbstractContainerScreen<BurnerMenu> {
         burnButton = addRenderableWidget(Button.builder(
                         Component.translatable("button.tf_music.burn"),
                         button -> beginBurn())
-                .bounds(leftPos + 230, topPos + 76, 48, 20)
+                .bounds(leftPos + BURN_BUTTON_X, topPos + BURN_BUTTON_Y, BURN_BUTTON_WIDTH, 20)
                 .build());
         updateSourceWidgets();
         updateBusyState();
@@ -99,6 +136,7 @@ public final class BurnerScreen extends AbstractContainerScreen<BurnerMenu> {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         renderBackground(graphics);
         super.render(graphics, mouseX, mouseY, partialTick);
+        drawSelectedSource(graphics);
         renderTooltip(graphics, mouseX, mouseY);
     }
 
@@ -106,17 +144,42 @@ public final class BurnerScreen extends AbstractContainerScreen<BurnerMenu> {
     protected void renderBg(GuiGraphics graphics, float partialTick, int mouseX, int mouseY) {
         graphics.fill(leftPos, topPos, leftPos + imageWidth, topPos + imageHeight, 0xF0181D22);
         graphics.renderOutline(leftPos, topPos, imageWidth, imageHeight, 0xFF65717C);
-        graphics.fill(leftPos + 1, topPos + 16, leftPos + imageWidth - 1, topPos + 17, 0xFF343D45);
-        graphics.fill(leftPos + 1, topPos + 128, leftPos + imageWidth - 1, topPos + 129, 0xFF343D45);
+        graphics.fill(leftPos + 1, topPos + 1, leftPos + imageWidth - 1, topPos + 18, 0xFF20272D);
+        graphics.fill(leftPos + 1, topPos + 18, leftPos + imageWidth - 1, topPos + 19, 0xFF4E9E8E);
+        graphics.fill(leftPos + 1, topPos + 19, leftPos + imageWidth - 1, topPos + CONTENT_DIVIDER_Y, 0xFF11161B);
+        graphics.fill(leftPos + 1, topPos + CONTENT_DIVIDER_Y + 2, leftPos + imageWidth - 1, topPos + imageHeight - 1, 0xFF171C21);
+        graphics.fill(
+                leftPos + 1,
+                topPos + CONTENT_DIVIDER_Y,
+                leftPos + imageWidth - 1,
+                topPos + CONTENT_DIVIDER_Y + 2,
+                0xFF343D45
+        );
+        graphics.fill(leftPos + 172, topPos + 24, leftPos + 173, topPos + 84, 0xFF343D45);
+        graphics.fill(
+                leftPos + BurnerMenu.PLAYER_INVENTORY_X,
+                topPos + BurnerMenu.PLAYER_INVENTORY_Y + 54,
+                leftPos + BurnerMenu.PLAYER_INVENTORY_X + 162,
+                topPos + BurnerMenu.PLAYER_INVENTORY_Y + 56,
+                0xFF343D45
+        );
 
-        drawSlot(graphics, leftPos + 250, topPos + 48);
+        drawSlot(graphics, leftPos + BurnerMenu.DISC_SLOT_X, topPos + BurnerMenu.DISC_SLOT_Y);
         for (int row = 0; row < 3; row++) {
             for (int column = 0; column < 9; column++) {
-                drawSlot(graphics, leftPos + 62 + column * 18, topPos + 140 + row * 18);
+                drawSlot(
+                        graphics,
+                        leftPos + BurnerMenu.PLAYER_INVENTORY_X + column * 18,
+                        topPos + BurnerMenu.PLAYER_INVENTORY_Y + row * 18
+                );
             }
         }
         for (int column = 0; column < 9; column++) {
-            drawSlot(graphics, leftPos + 62 + column * 18, topPos + 198);
+            drawSlot(
+                    graphics,
+                    leftPos + BurnerMenu.PLAYER_INVENTORY_X + column * 18,
+                    topPos + BurnerMenu.PLAYER_INVENTORY_Y + BurnerMenu.HOTBAR_OFFSET
+            );
         }
     }
 
@@ -124,8 +187,8 @@ public final class BurnerScreen extends AbstractContainerScreen<BurnerMenu> {
     protected void renderLabels(GuiGraphics graphics, int mouseX, int mouseY) {
         graphics.drawString(font, title, titleLabelX, titleLabelY, 0xE7EDF2, false);
         graphics.drawString(font, playerInventoryTitle, inventoryLabelX, inventoryLabelY, 0xB7C2CC, false);
-        graphics.drawString(font, Component.translatable("label.tf_music.disc"), 240, 37, 0xB7C2CC, false);
-        graphics.drawString(font, status, 84, 109, statusColor, false);
+        graphics.drawCenteredString(font, Component.translatable("label.tf_music.disc"), 201, 27, 0xB7C2CC);
+        drawStatus(graphics);
     }
 
     @Override
@@ -165,6 +228,26 @@ public final class BurnerScreen extends AbstractContainerScreen<BurnerMenu> {
                         ? "field.tf_music.direct_url"
                         : "field.tf_music.bvid"
         ));
+    }
+
+    private void drawSelectedSource(GuiGraphics graphics) {
+        int x = selectedSource == MusicSource.DIRECT_LINK ? SOURCE_DIRECT_X : SOURCE_BILIBILI_X;
+        graphics.renderOutline(
+                leftPos + x,
+                topPos + SOURCE_Y,
+                SOURCE_WIDTH,
+                SOURCE_HEIGHT,
+                0xFFF2C66D
+        );
+    }
+
+    private void drawStatus(GuiGraphics graphics) {
+        String text = status.getString().replace('\n', ' ');
+        String line = font.plainSubstrByWidth(text, STATUS_WIDTH);
+        if (line.length() < text.length()) {
+            line = font.plainSubstrByWidth(line, Math.max(0, STATUS_WIDTH - 12)) + "...";
+        }
+        graphics.drawString(font, line, STATUS_X, STATUS_Y, statusColor, false);
     }
 
     private void beginBurn() {

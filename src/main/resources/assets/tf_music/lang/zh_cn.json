@@ -18,6 +18,7 @@
   "button.tf_music.pause": "暂停",
   "button.tf_music.stop": "停止",
   "label.tf_music.disc": "唱片",
+  "label.tf_music.speed": "播放倍率",
   "status.tf_music.ready": "就绪",
   "status.tf_music.insert_disc": "请放入空白 TF 音乐唱片",
   "status.tf_music.disc_already_recorded": "这张唱片已经刻录过了",

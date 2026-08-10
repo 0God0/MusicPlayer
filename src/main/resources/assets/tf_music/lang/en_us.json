@@ -18,6 +18,7 @@
   "button.tf_music.pause": "Pause",
   "button.tf_music.stop": "Stop",
   "label.tf_music.disc": "Disc",
+  "label.tf_music.speed": "Playback speed",
   "status.tf_music.ready": "Ready",
   "status.tf_music.insert_disc": "Insert a blank TF Music disc",
   "status.tf_music.disc_already_recorded": "This disc is already recorded",

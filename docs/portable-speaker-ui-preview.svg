@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="872" viewBox="0 0 230 218">
+  <title>TF Music portable speaker screen preview</title>
+  <desc>Game-local coordinate preview. Screen 230x218; controls y27, progress y53, speed buttons y91, inventory y134, hotbar y194.</desc>
+  <defs>
+    <style>
+      .ui-text { font-family: "Microsoft YaHei UI", "Noto Sans CJK SC", sans-serif; fill: #e7edf2; font-size: 7px; }
+      .muted { fill: #b7c2cc; }
+      .button-text { font-family: "Microsoft YaHei UI", "Noto Sans CJK SC", sans-serif; fill: #ffffff; font-size: 7px; text-anchor: middle; dominant-baseline: middle; }
+      .speed-text { font-family: "Segoe UI", sans-serif; fill: #ffffff; font-size: 6.5px; text-anchor: middle; dominant-baseline: middle; }
+    </style>
+    <g id="slot">
+      <rect x="-1" y="-1" width="18" height="18" fill="#090c0f" stroke="#58636d" stroke-width="1"/>
+      <rect width="16" height="16" fill="#11171b"/>
+    </g>
+    <g id="button50">
+      <rect width="50" height="20" fill="#15191d"/>
+      <rect x="1" y="1" width="48" height="18" fill="#3e464d" stroke="#89949d" stroke-width="0.5"/>
+      <line x1="1" y1="19" x2="49" y2="19" stroke="#20252a"/>
+    </g>
+    <g id="button36">
+      <rect width="36" height="18" fill="#15191d"/>
+      <rect x="1" y="1" width="34" height="16" fill="#343c43" stroke="#737f88" stroke-width="0.5"/>
+      <line x1="1" y1="17" x2="35" y2="17" stroke="#20252a"/>
+    </g>
+  </defs>
+
+  <rect width="230" height="218" fill="#181d22"/>
+  <rect x="0.5" y="0.5" width="229" height="217" fill="none" stroke="#65717c"/>
+  <rect x="1" y="1" width="228" height="17" fill="#20272d"/>
+  <rect x="1" y="18" width="228" height="1" fill="#4e9e8e"/>
+  <rect x="1" y="19" width="228" height="95" fill="#11161b"/>
+  <rect x="1" y="116" width="228" height="101" fill="#171c21"/>
+  <rect x="1" y="114" width="228" height="2" fill="#343d45"/>
+
+  <text class="ui-text" x="8" y="12">便携式音箱</text>
+
+  <use href="#button50" x="8" y="27"/>
+  <text class="button-text" x="33" y="37">播放</text>
+  <use href="#button50" x="62" y="27"/>
+  <text class="button-text" x="87" y="37">暂停</text>
+  <use href="#button50" x="116" y="27"/>
+  <text class="button-text" x="141" y="37">停止</text>
+
+  <rect x="8" y="53" width="158" height="18" fill="#0b0f12" stroke="#5c6770" stroke-width="1"/>
+  <rect x="10" y="55" width="66" height="14" fill="#263139"/>
+  <rect x="74" y="54" width="5" height="16" fill="#70b8a5" stroke="#b7ded2" stroke-width="0.5"/>
+  <text class="button-text" x="87" y="62">01:18 / 03:42</text>
+
+  <text class="ui-text muted" x="8" y="86">播放倍率</text>
+  <use href="#button36" x="8" y="91"/>
+  <text class="speed-text" x="26" y="100">0.5x</text>
+  <use href="#button36" x="48" y="91"/>
+  <rect x="48.5" y="91.5" width="35" height="17" fill="none" stroke="#f2c66d" stroke-width="1"/>
+  <text class="speed-text" x="66" y="100">1.0x</text>
+  <use href="#button36" x="88" y="91"/>
+  <text class="speed-text" x="106" y="100">1.5x</text>
+  <use href="#button36" x="128" y="91"/>
+  <text class="speed-text" x="146" y="100">2.0x</text>
+
+  <line x1="172" y1="24" x2="172" y2="76" stroke="#343d45"/>
+  <text class="ui-text muted" x="201" y="33" text-anchor="middle">唱片</text>
+  <use href="#slot" x="193" y="43"/>
+  <circle cx="201" cy="51" r="6" fill="#904f7c" stroke="#d695bf" stroke-width="1"/>
+  <circle cx="201" cy="51" r="2" fill="#171c21"/>
+
+  <text class="ui-text muted" x="34" y="128">物品栏</text>
+  <line x1="34" y1="189" x2="196" y2="189" stroke="#343d45"/>
+
+  <g>
+    <use href="#slot" x="34" y="134"/><use href="#slot" x="52" y="134"/><use href="#slot" x="70" y="134"/>
+    <use href="#slot" x="88" y="134"/><use href="#slot" x="106" y="134"/><use href="#slot" x="124" y="134"/>
+    <use href="#slot" x="142" y="134"/><use href="#slot" x="160" y="134"/><use href="#slot" x="178" y="134"/>
+    <use href="#slot" x="34" y="152"/><use href="#slot" x="52" y="152"/><use href="#slot" x="70" y="152"/>
+    <use href="#slot" x="88" y="152"/><use href="#slot" x="106" y="152"/><use href="#slot" x="124" y="152"/>
+    <use href="#slot" x="142" y="152"/><use href="#slot" x="160" y="152"/><use href="#slot" x="178" y="152"/>
+    <use href="#slot" x="34" y="170"/><use href="#slot" x="52" y="170"/><use href="#slot" x="70" y="170"/>
+    <use href="#slot" x="88" y="170"/><use href="#slot" x="106" y="170"/><use href="#slot" x="124" y="170"/>
+    <use href="#slot" x="142" y="170"/><use href="#slot" x="160" y="170"/><use href="#slot" x="178" y="170"/>
+    <use href="#slot" x="34" y="194"/><use href="#slot" x="52" y="194"/><use href="#slot" x="70" y="194"/>
+    <use href="#slot" x="88" y="194"/><use href="#slot" x="106" y="194"/><use href="#slot" x="124" y="194"/>
+    <use href="#slot" x="142" y="194"/><use href="#slot" x="160" y="194"/><use href="#slot" x="178" y="194"/>
+  </g>
+</svg>

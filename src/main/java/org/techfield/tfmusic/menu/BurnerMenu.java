@@ -16,6 +16,11 @@ import org.techfield.tfmusic.registry.ModMenus;
 
 public final class BurnerMenu extends AbstractContainerMenu {
     public static final int DISC_SLOT = 0;
+    public static final int DISC_SLOT_X = 193;
+    public static final int DISC_SLOT_Y = 43;
+    public static final int PLAYER_INVENTORY_X = 34;
+    public static final int PLAYER_INVENTORY_Y = 138;
+    public static final int HOTBAR_OFFSET = 58;
     private static final int PLAYER_INVENTORY_START = 1;
     private static final int PLAYER_INVENTORY_END = PLAYER_INVENTORY_START + 27;
     private static final int HOTBAR_START = PLAYER_INVENTORY_END;
@@ -32,7 +37,7 @@ public final class BurnerMenu extends AbstractContainerMenu {
         super(ModMenus.BURNER.get(), containerId);
         this.access = ContainerLevelAccess.create(playerInventory.player.level(), pos);
 
-        addSlot(new Slot(burnerInventory, DISC_SLOT, 250, 48) {
+        addSlot(new Slot(burnerInventory, DISC_SLOT, DISC_SLOT_X, DISC_SLOT_Y) {
             @Override
             public boolean mayPlace(ItemStack stack) {
                 return stack.is(ModItems.MUSIC_DISC.get());
@@ -43,7 +48,7 @@ public final class BurnerMenu extends AbstractContainerMenu {
                 return 1;
             }
         });
-        addPlayerInventory(playerInventory, 62, 140);
+        addPlayerInventory(playerInventory, PLAYER_INVENTORY_X, PLAYER_INVENTORY_Y);
     }
 
     public boolean burn(MusicTrack track) {
@@ -112,7 +117,7 @@ public final class BurnerMenu extends AbstractContainerMenu {
             }
         }
         for (int column = 0; column < 9; column++) {
-            addSlot(new Slot(inventory, column, x + column * 18, y + 58));
+            addSlot(new Slot(inventory, column, x + column * 18, y + HOTBAR_OFFSET));
         }
     }
 }

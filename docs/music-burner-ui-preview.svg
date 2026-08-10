@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="872" viewBox="0 0 230 218">
+  <title>TF Music music burner screen preview</title>
+  <desc>Game-local coordinate preview. Screen 230x218; source buttons y22, name field y47, locator y69, page and burn row y91, status y114, inventory y138, hotbar y196.</desc>
+  <defs>
+    <style>
+      .ui-text { font-family: "Microsoft YaHei UI", "Noto Sans CJK SC", sans-serif; fill: #e7edf2; font-size: 7px; }
+      .muted { fill: #b7c2cc; }
+      .button-text { font-family: "Microsoft YaHei UI", "Noto Sans CJK SC", sans-serif; fill: #ffffff; font-size: 7px; text-anchor: middle; dominant-baseline: middle; }
+      .field-text { font-family: "Microsoft YaHei UI", "Noto Sans CJK SC", sans-serif; fill: #7f8b95; font-size: 6.5px; dominant-baseline: middle; }
+    </style>
+    <g id="slot">
+      <rect x="-1" y="-1" width="18" height="18" fill="#090c0f" stroke="#58636d" stroke-width="1"/>
+      <rect width="16" height="16" fill="#11171b"/>
+    </g>
+    <g id="button70">
+      <rect width="70" height="20" fill="#15191d"/>
+      <rect x="1" y="1" width="68" height="18" fill="#3e464d" stroke="#89949d" stroke-width="0.5"/>
+      <line x1="1" y1="19" x2="69" y2="19" stroke="#20252a"/>
+    </g>
+    <g id="input158">
+      <rect width="158" height="18" fill="#080b0e" stroke="#58636d" stroke-width="1"/>
+      <rect x="2" y="2" width="154" height="14" fill="#20272d"/>
+    </g>
+    <g id="input50">
+      <rect width="50" height="18" fill="#080b0e" stroke="#58636d" stroke-width="1"/>
+      <rect x="2" y="2" width="46" height="14" fill="#20272d"/>
+    </g>
+  </defs>
+
+  <rect width="230" height="218" fill="#181d22"/>
+  <rect x="0.5" y="0.5" width="229" height="217" fill="none" stroke="#65717c"/>
+  <rect x="1" y="1" width="228" height="17" fill="#20272d"/>
+  <rect x="1" y="18" width="228" height="1" fill="#4e9e8e"/>
+  <rect x="1" y="19" width="228" height="105" fill="#11161b"/>
+  <rect x="1" y="126" width="228" height="91" fill="#171c21"/>
+  <rect x="1" y="124" width="228" height="2" fill="#343d45"/>
+
+  <text class="ui-text" x="8" y="12">音乐刻录机</text>
+
+  <use href="#button70" x="8" y="22"/>
+  <rect x="8.5" y="22.5" width="69" height="19" fill="none" stroke="#f2c66d" stroke-width="1"/>
+  <text class="button-text" x="43" y="32">音乐直链</text>
+  <use href="#button70" x="82" y="22"/>
+  <text class="button-text" x="117" y="32">哔哩哔哩</text>
+
+  <use href="#input158" x="8" y="47"/>
+  <text class="field-text" x="13" y="56">歌曲名称</text>
+
+  <use href="#input158" x="8" y="69"/>
+  <text class="field-text" x="13" y="78">MP3 或 M4A 直链</text>
+
+  <use href="#input50" x="8" y="91"/>
+  <text class="field-text" x="13" y="100">分 P</text>
+  <use href="#button70" x="62" y="91"/>
+  <text class="button-text" x="97" y="101">刻录</text>
+
+  <text class="ui-text" x="8" y="121" fill="#f2c66d">正在下载并解析音频...</text>
+
+  <line x1="172" y1="24" x2="172" y2="84" stroke="#343d45"/>
+  <text class="ui-text muted" x="201" y="32" text-anchor="middle">唱片</text>
+  <use href="#slot" x="193" y="43"/>
+  <circle cx="201" cy="51" r="6" fill="#904f7c" stroke="#d695bf" stroke-width="1"/>
+  <circle cx="201" cy="51" r="2" fill="#171c21"/>
+
+  <text class="ui-text muted" x="34" y="135">物品栏</text>
+  <line x1="34" y1="192" x2="196" y2="193" stroke="#343d45"/>
+  <g>
+    <use href="#slot" x="34" y="138"/><use href="#slot" x="52" y="138"/><use href="#slot" x="70" y="138"/>
+    <use href="#slot" x="88" y="138"/><use href="#slot" x="106" y="138"/><use href="#slot" x="124" y="138"/>
+    <use href="#slot" x="142" y="138"/><use href="#slot" x="160" y="138"/><use href="#slot" x="178" y="138"/>
+    <use href="#slot" x="34" y="156"/><use href="#slot" x="52" y="156"/><use href="#slot" x="70" y="156"/>
+    <use href="#slot" x="88" y="156"/><use href="#slot" x="106" y="156"/><use href="#slot" x="124" y="156"/>
+    <use href="#slot" x="142" y="156"/><use href="#slot" x="160" y="156"/><use href="#slot" x="178" y="156"/>
+    <use href="#slot" x="34" y="174"/><use href="#slot" x="52" y="174"/><use href="#slot" x="70" y="174"/>
+    <use href="#slot" x="88" y="174"/><use href="#slot" x="106" y="174"/><use href="#slot" x="124" y="174"/>
+    <use href="#slot" x="142" y="174"/><use href="#slot" x="160" y="174"/><use href="#slot" x="178" y="174"/>
+    <use href="#slot" x="34" y="196"/><use href="#slot" x="52" y="196"/><use href="#slot" x="70" y="196"/>
+    <use href="#slot" x="88" y="196"/><use href="#slot" x="106" y="196"/><use href="#slot" x="124" y="196"/>
+    <use href="#slot" x="142" y="196"/><use href="#slot" x="160" y="196"/><use href="#slot" x="178" y="196"/>
+  </g>
+</svg>

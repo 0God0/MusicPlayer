@@ -17,6 +17,10 @@ import java.util.UUID;
 
 public final class PortableSpeakerMenu extends AbstractContainerMenu {
     public static final int DISC_SLOT = 0;
+    public static final int DISC_SLOT_X = 193;
+    public static final int DISC_SLOT_Y = 43;
+    public static final int PLAYER_INVENTORY_X = 34;
+    public static final int PLAYER_INVENTORY_Y = 134;
     private static final int PLAYER_INVENTORY_START = 1;
     private static final int PLAYER_INVENTORY_END = PLAYER_INVENTORY_START + 27;
     private static final int HOTBAR_START = PLAYER_INVENTORY_END;
@@ -36,7 +40,7 @@ public final class PortableSpeakerMenu extends AbstractContainerMenu {
         this.speakerId = speakerId;
         this.speakerInventory = new SpeakerContainer();
 
-        addSlot(new Slot(speakerInventory, DISC_SLOT, 176, 26) {
+        addSlot(new Slot(speakerInventory, DISC_SLOT, DISC_SLOT_X, DISC_SLOT_Y) {
             @Override
             public boolean mayPlace(ItemStack stack) {
                 return stack.is(ModItems.MUSIC_DISC.get());
@@ -47,7 +51,7 @@ public final class PortableSpeakerMenu extends AbstractContainerMenu {
                 return 1;
             }
         });
-        addPlayerInventory(playerInventory, 24, 92);
+        addPlayerInventory(playerInventory, PLAYER_INVENTORY_X, PLAYER_INVENTORY_Y);
     }
 
     public UUID speakerId() {

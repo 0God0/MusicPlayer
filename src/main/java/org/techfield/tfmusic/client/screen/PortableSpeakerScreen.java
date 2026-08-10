@@ -17,18 +17,36 @@ import org.techfield.tfmusic.util.TimeUtil;
 import java.util.Locale;
 
 public final class PortableSpeakerScreen extends AbstractContainerScreen<PortableSpeakerMenu> {
-    private Button playPauseButton;
+    private static final int PLAY_BUTTON_X = 8;
+    private static final int PAUSE_BUTTON_X = 62;
+    private static final int STOP_BUTTON_X = 116;
+    private static final int CONTROL_BUTTON_Y = 27;
+    private static final int PROGRESS_X = 8;
+    private static final int PROGRESS_Y = 53;
+    private static final int PROGRESS_WIDTH = 158;
+    private static final int PROGRESS_HEIGHT = 18;
+    private static final int SPEED_LABEL_Y = 79;
+    private static final int SPEED_BUTTON_Y = 91;
+    private static final int SPEED_BUTTON_WIDTH = 36;
+    private static final int SPEED_BUTTON_GAP = 4;
+    private static final int[] SPEEDS = {50, 100, 150, 200};
+
+    private Button playButton;
+    private Button pauseButton;
+    private Button stopButton;
+    private final Button[] speedButtons = new Button[SPEEDS.length];
     private ProgressSlider progressSlider;
     private long durationMs;
+    private float displayedSpeed = 1.0F;
 
     public PortableSpeakerScreen(PortableSpeakerMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title);
-        imageWidth = 210;
-        imageHeight = 176;
+        imageWidth = 230;
+        imageHeight = 218;
         titleLabelX = 8;
         titleLabelY = 6;
-        inventoryLabelX = 24;
-        inventoryLabelY = 82;
+        inventoryLabelX = PortableSpeakerMenu.PLAYER_INVENTORY_X;
+        inventoryLabelY = 121;
     }
 
     @Override
@@ -37,36 +55,48 @@ public final class PortableSpeakerScreen extends AbstractContainerScreen<Portabl
         PortableSpeakerData data = menu.speakerData();
         MusicTrack track = MusicTrack.fromDisc(data.disc()).orElse(null);
         durationMs = track == null ? 0L : track.durationMs();
+        displayedSpeed = ClientSpeakerTracker.speed(menu.speakerId(), data.speed());
         if (durationMs > 0L) {
             ClientSpeakerTracker.localSeek(menu.speakerId(), durationMs, data.progressMs(), data.playing());
             ClientSpeakerTracker.localSpeed(menu.speakerId(), durationMs, data.speed());
         }
 
-        playPauseButton = addRenderableWidget(Button.builder(playPauseLabel(), button -> togglePlayback())
-                .bounds(leftPos + 8, topPos + 24, 58, 20)
+        playButton = addRenderableWidget(Button.builder(Component.translatable("button.tf_music.play"), button -> playPlayback())
+                .bounds(leftPos + PLAY_BUTTON_X, topPos + CONTROL_BUTTON_Y, 50, 20)
                 .build());
-        addRenderableWidget(Button.builder(Component.translatable("button.tf_music.stop"), button -> stopPlayback())
-                .bounds(leftPos + 70, topPos + 24, 48, 20)
+        pauseButton = addRenderableWidget(Button.builder(Component.translatable("button.tf_music.pause"), button -> pausePlayback())
+                .bounds(leftPos + PAUSE_BUTTON_X, topPos + CONTROL_BUTTON_Y, 50, 20)
+                .build());
+        stopButton = addRenderableWidget(Button.builder(Component.translatable("button.tf_music.stop"), button -> stopPlayback())
+                .bounds(leftPos + STOP_BUTTON_X, topPos + CONTROL_BUTTON_Y, 50, 20)
                 .build());
 
         progressSlider = addRenderableWidget(new ProgressSlider(
-                leftPos + 8,
-                topPos + 49,
-                154,
-                18,
+                leftPos + PROGRESS_X,
+                topPos + PROGRESS_Y,
+                PROGRESS_WIDTH,
+                PROGRESS_HEIGHT,
                 progressRatio()
         ));
 
-        float[] speeds = {0.5F, 1.0F, 1.5F, 2.0F};
-        for (int index = 0; index < speeds.length; index++) {
-            float speed = speeds[index];
-            addRenderableWidget(Button.builder(
-                            Component.literal(String.format(Locale.ROOT, "%.1fx", speed)),
-                            button -> setSpeed(speed))
-                    .bounds(leftPos + 8 + index * 39, topPos + 70, 36, 18)
-                    .build());
+        for (int index = 0; index < SPEEDS.length; index++) {
+            float speed = SPEEDS[index] / 100.0F;
+            addSpeedButton(index, speed);
         }
         updateControls();
+    }
+
+    private void addSpeedButton(int index, float speed) {
+        addRenderableWidget(speedButtons[index] = Button.builder(
+                        Component.literal(String.format(Locale.ROOT, "%.1fx", speed)),
+                        button -> setSpeed(speed))
+                .bounds(
+                        leftPos + PROGRESS_X + index * (SPEED_BUTTON_WIDTH + SPEED_BUTTON_GAP),
+                        topPos + SPEED_BUTTON_Y,
+                        SPEED_BUTTON_WIDTH,
+                        18
+                )
+                .build());
     }
 
     @Override
@@ -74,7 +104,10 @@ public final class PortableSpeakerScreen extends AbstractContainerScreen<Portabl
         PortableSpeakerData data = menu.speakerData();
         MusicTrack track = MusicTrack.fromDisc(data.disc()).orElse(null);
         durationMs = track == null ? 0L : track.durationMs();
-        progressSlider.sync(progressRatio());
+        displayedSpeed = ClientSpeakerTracker.speed(menu.speakerId(), data.speed());
+        if (progressSlider != null) {
+            progressSlider.sync(progressRatio());
+        }
         updateControls();
     }
 
@@ -82,6 +115,7 @@ public final class PortableSpeakerScreen extends AbstractContainerScreen<Portabl
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         renderBackground(graphics);
         super.render(graphics, mouseX, mouseY, partialTick);
+        drawSelectedSpeed(graphics);
         renderTooltip(graphics, mouseX, mouseY);
     }
 
@@ -89,17 +123,36 @@ public final class PortableSpeakerScreen extends AbstractContainerScreen<Portabl
     protected void renderBg(GuiGraphics graphics, float partialTick, int mouseX, int mouseY) {
         graphics.fill(leftPos, topPos, leftPos + imageWidth, topPos + imageHeight, 0xF0181D22);
         graphics.renderOutline(leftPos, topPos, imageWidth, imageHeight, 0xFF65717C);
-        graphics.fill(leftPos + 1, topPos + 16, leftPos + imageWidth - 1, topPos + 17, 0xFF343D45);
-        graphics.fill(leftPos + 1, topPos + 80, leftPos + imageWidth - 1, topPos + 81, 0xFF343D45);
+        graphics.fill(leftPos + 1, topPos + 1, leftPos + imageWidth - 1, topPos + 18, 0xFF20272D);
+        graphics.fill(leftPos + 1, topPos + 18, leftPos + imageWidth - 1, topPos + 19, 0xFF4E9E8E);
+        graphics.fill(leftPos + 1, topPos + 19, leftPos + imageWidth - 1, topPos + 114, 0xFF11161B);
+        graphics.fill(leftPos + 1, topPos + 116, leftPos + imageWidth - 1, topPos + imageHeight - 1, 0xFF171C21);
+        graphics.fill(leftPos + 1, topPos + 114, leftPos + imageWidth - 1, topPos + 116, 0xFF343D45);
+        graphics.fill(leftPos + 172, topPos + 24, leftPos + 173, topPos + 76, 0xFF343D45);
+        graphics.fill(
+                leftPos + PortableSpeakerMenu.PLAYER_INVENTORY_X,
+                topPos + 189,
+                leftPos + PortableSpeakerMenu.PLAYER_INVENTORY_X + 162,
+                topPos + 190,
+                0xFF343D45
+        );
 
-        drawSlot(graphics, leftPos + 176, topPos + 26);
+        drawSlot(graphics, leftPos + PortableSpeakerMenu.DISC_SLOT_X, topPos + PortableSpeakerMenu.DISC_SLOT_Y);
         for (int row = 0; row < 3; row++) {
             for (int column = 0; column < 9; column++) {
-                drawSlot(graphics, leftPos + 24 + column * 18, topPos + 92 + row * 18);
+                drawSlot(
+                        graphics,
+                        leftPos + PortableSpeakerMenu.PLAYER_INVENTORY_X + column * 18,
+                        topPos + PortableSpeakerMenu.PLAYER_INVENTORY_Y + row * 18
+                );
             }
         }
         for (int column = 0; column < 9; column++) {
-            drawSlot(graphics, leftPos + 24 + column * 18, topPos + 150);
+            drawSlot(
+                    graphics,
+                    leftPos + PortableSpeakerMenu.PLAYER_INVENTORY_X + column * 18,
+                    topPos + PortableSpeakerMenu.PLAYER_INVENTORY_Y + 60
+            );
         }
     }
 
@@ -107,29 +160,32 @@ public final class PortableSpeakerScreen extends AbstractContainerScreen<Portabl
     protected void renderLabels(GuiGraphics graphics, int mouseX, int mouseY) {
         graphics.drawString(font, title, titleLabelX, titleLabelY, 0xE7EDF2, false);
         graphics.drawString(font, playerInventoryTitle, inventoryLabelX, inventoryLabelY, 0xB7C2CC, false);
-        graphics.drawString(font, Component.translatable("label.tf_music.disc"), 169, 17, 0xB7C2CC, false);
+        graphics.drawString(font, Component.translatable("label.tf_music.speed"), PROGRESS_X, SPEED_LABEL_Y, 0xB7C2CC, false);
+        graphics.drawCenteredString(font, Component.translatable("label.tf_music.disc"), 201, 27, 0xB7C2CC);
     }
 
-    private void togglePlayback() {
+    private void playPlayback() {
         if (durationMs <= 0L) {
             return;
         }
         PortableSpeakerData data = menu.speakerData();
-        boolean playing = ClientSpeakerTracker.isPlaying(menu.speakerId());
-        SpeakerControlC2SPacket.Action action = playing
-                ? SpeakerControlC2SPacket.Action.PAUSE
-                : SpeakerControlC2SPacket.Action.PLAY;
-        ModNetwork.sendToServer(new SpeakerControlC2SPacket(menu.speakerId(), action, 0L, data.speed()));
-        if (playing) {
-            ClientSpeakerTracker.onPause(menu.speakerId());
-        } else {
-            ClientSpeakerTracker.localPlay(
-                    menu.speakerId(),
-                    durationMs,
-                    ClientSpeakerTracker.progress(menu.speakerId(), durationMs),
-                    data.speed()
-            );
+        long progress = ClientSpeakerTracker.progress(menu.speakerId(), durationMs);
+        ModNetwork.sendToServer(new SpeakerControlC2SPacket(
+                menu.speakerId(), SpeakerControlC2SPacket.Action.PLAY, 0L, data.speed()
+        ));
+        ClientSpeakerTracker.localPlay(menu.speakerId(), durationMs, progress, data.speed());
+        updateControls();
+    }
+
+    private void pausePlayback() {
+        if (durationMs <= 0L) {
+            return;
         }
+        PortableSpeakerData data = menu.speakerData();
+        ModNetwork.sendToServer(new SpeakerControlC2SPacket(
+                menu.speakerId(), SpeakerControlC2SPacket.Action.PAUSE, 0L, data.speed()
+        ));
+        ClientSpeakerTracker.onPause(menu.speakerId());
         updateControls();
     }
 
@@ -149,6 +205,7 @@ public final class PortableSpeakerScreen extends AbstractContainerScreen<Portabl
         ModNetwork.sendToServer(new SpeakerControlC2SPacket(
                 menu.speakerId(), SpeakerControlC2SPacket.Action.SPEED, 0L, speed
         ));
+        displayedSpeed = speed;
         ClientSpeakerTracker.localSpeed(menu.speakerId(), durationMs, speed);
     }
 
@@ -165,18 +222,37 @@ public final class PortableSpeakerScreen extends AbstractContainerScreen<Portabl
     }
 
     private void updateControls() {
-        if (playPauseButton == null) {
+        if (playButton == null || progressSlider == null) {
             return;
         }
-        playPauseButton.active = durationMs > 0L;
-        playPauseButton.setMessage(playPauseLabel());
-        progressSlider.active = durationMs > 0L;
+        boolean hasTrack = durationMs > 0L;
+        boolean playing = ClientSpeakerTracker.isPlaying(menu.speakerId());
+        playButton.active = hasTrack;
+        pauseButton.active = hasTrack && playing;
+        stopButton.active = hasTrack;
+        progressSlider.active = hasTrack;
+        for (Button speedButton : speedButtons) {
+            speedButton.active = hasTrack;
+        }
     }
 
-    private Component playPauseLabel() {
-        return Component.translatable(ClientSpeakerTracker.isPlaying(menu.speakerId())
-                ? "button.tf_music.pause"
-                : "button.tf_music.play");
+    private void drawSelectedSpeed(GuiGraphics graphics) {
+        if (durationMs <= 0L) {
+            return;
+        }
+        int speedPercent = Math.round(displayedSpeed * 100.0F);
+        for (int index = 0; index < SPEEDS.length; index++) {
+            if (SPEEDS[index] == speedPercent) {
+                graphics.renderOutline(
+                        leftPos + PROGRESS_X + index * (SPEED_BUTTON_WIDTH + SPEED_BUTTON_GAP),
+                        topPos + SPEED_BUTTON_Y,
+                        SPEED_BUTTON_WIDTH,
+                        18,
+                        0xFFF2C66D
+                );
+                return;
+            }
+        }
     }
 
     private double progressRatio() {
