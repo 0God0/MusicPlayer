@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "tf_music:block/music_burner"
+    }
+  }
+}

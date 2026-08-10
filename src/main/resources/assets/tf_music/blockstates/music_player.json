@@ -1,0 +1,10 @@
+{
+  "variants": {
+    "has_record=false": {
+      "model": "tf_music:block/music_player"
+    },
+    "has_record=true": {
+      "model": "tf_music:block/music_player"
+    }
+  }
+}

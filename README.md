@@ -1,0 +1,70 @@
+# TF Music
+
+TF Music 是从 `TestMod` 音乐模块独立迁移出的 Forge 1.20.1 Mod。工程不依赖原项目的模块化机器、能源、流体或多方块系统。
+
+## 环境
+
+- Minecraft 1.20.1
+- Forge 47.4.5
+- Java 17
+- Mod ID：`tf_music`
+
+## 内容
+
+- `tf_music:music_burner`：刻录直链或哔哩哔哩音频。
+- `tf_music:music_disc`：保存来源、名称、时长、地址及分 P 数据。
+- `tf_music:music_player`：固定位置、64 格半径的空间音乐播放器。
+- `tf_music:portable_speaker`：支持播放、暂停、停止、拖动进度及 0.5x 至 2.0x 倍速；持有者听到立体声，附近玩家听到跟随位置的单声道。
+
+## 使用流程
+
+1. 将空白网络音乐唱片放入音乐刻录机。
+2. 选择“音乐直链”或“哔哩哔哩”，填写歌曲信息并点击“刻录”。
+3. 将唱片放入网络音乐播放器，或右键便携式音箱并放入唱片。
+4. 再次右键固定播放器会弹出唱片并停止播放。
+
+直链支持 HTTP/HTTPS 的 MP3 和 M4A。哔哩哔哩来源使用 BV 号和 1 至 128 的分 P，并通过公开 API 获取音频流。音频缓存在客户端的 `tf_music/cache/audio`。
+
+## 多人同步与持久化
+
+- 服务端只同步歌曲元数据、播放进度、倍率和播放器位置；每个客户端独立下载、缓存和解码。
+- 固定播放器在区块卸载或服务器重启后从保存进度恢复。
+- 便携式音箱定期保存进度，跨维度时会重建跟随声音，离开玩家背包时自动暂停。
+- 网络控制在服务端验证音箱 UUID 所有权，并约束拖动进度和播放倍率的取值范围。
+
+## 兼容模式风险
+
+本工程按迁移要求保留原项目的宽松联网行为：允许任意 HTTP/HTTPS 主机和端口，且不设置单文件大小及缓存总量上限。在不受信任的多人服务器中，这会带来客户端访问内网地址和磁盘占用失控的风险。部署前应确认服务器玩家可信，并在后续版本中通过配置启用地址和容量限制。
+
+## 构建
+
+```powershell
+.\gradlew.bat clean build
+```
+
+可发布文件为 `build/libs/tf_music-1.0.0.jar`。`tf_music-1.0.0-slim.jar` 不包含 LavaPlayer 及原生解码库，不能单独使用。
+
+## 安装与发布
+
+1. 客户端和服务端均安装 Minecraft 1.20.1、Forge 47.4.5 或兼容的 47.x 版本。
+2. 将 `tf_music-1.0.0.jar` 放入客户端和服务端各自的 `mods` 目录。
+3. 联机时所有参与者必须安装相同版本；无需另外安装 LavaPlayer。
+4. 不要分发或安装 `tf_music-1.0.0-slim.jar`。
+
+运行测试：
+
+```powershell
+.\gradlew.bat test
+```
+
+可选哔哩哔哩实时下载与解码测试：
+
+```powershell
+.\gradlew.bat test "-DtfMusicBiliTest=true" --rerun-tasks
+```
+
+可选真实音频解码测试：
+
+```powershell
+.\gradlew.bat test "-DtfMusicTestAudio=D:\path\to\test.mp3"
+```

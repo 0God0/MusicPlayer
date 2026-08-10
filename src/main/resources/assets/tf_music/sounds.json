@@ -1,0 +1,11 @@
+{
+  "stream": {
+    "subtitle": "subtitle.tf_music.stream",
+    "sounds": [
+      {
+        "name": "minecraft:music/game/creative/creative1",
+        "stream": true
+      }
+    ]
+  }
+}

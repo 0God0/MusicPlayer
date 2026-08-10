@@ -1,0 +1,217 @@
+plugins {
+    id 'eclipse'
+    id 'idea'
+    id 'maven-publish'
+    id 'net.minecraftforge.gradle' version '[6.0,6.2)'
+    id 'com.github.johnrengelman.shadow' version '8.1.1'
+}
+
+version = mod_version
+group = mod_group_id
+
+base {
+    archivesName = mod_id
+}
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(17)
+
+def osName = System.getProperty('os.name').toLowerCase(Locale.ROOT)
+def osArch = System.getProperty('os.arch').toLowerCase(Locale.ROOT)
+def lavaNativePlatform
+if (osName.contains('win')) {
+    lavaNativePlatform = osArch.contains('64') ? 'win-x86-64' : 'win-x86'
+} else if (osName.contains('mac')) {
+    lavaNativePlatform = 'darwin'
+} else if (osName.contains('linux')) {
+    if (osArch == 'amd64' || osArch == 'x86_64') {
+        lavaNativePlatform = 'linux-x86-64'
+    } else if (osArch == 'x86' || osArch == 'i386' || osArch == 'i686') {
+        lavaNativePlatform = 'linux-x86'
+    } else if (osArch == 'aarch64' || osArch == 'arm64') {
+        lavaNativePlatform = 'linux-aarch64'
+    } else {
+        lavaNativePlatform = 'linux-armhf'
+    }
+} else {
+    throw new GradleException("Unsupported development platform: ${osName} ${osArch}")
+}
+def lavaNativeDirectory = layout.buildDirectory
+        .dir("lavaplayer-natives/natives/${lavaNativePlatform}")
+        .get()
+        .asFile
+
+minecraft {
+    mappings channel: mapping_channel, version: mapping_version
+    copyIdeResources = true
+
+    runs {
+        configureEach {
+            property 'forge.logging.markers', 'REGISTRIES'
+            property 'forge.logging.console.level', 'info'
+
+            mods {
+                "${mod_id}" {
+                    source sourceSets.main
+                }
+            }
+        }
+
+        client {
+            workingDirectory project.file('run/client')
+            property 'lava.native.dir', lavaNativeDirectory.absolutePath
+        }
+
+        server {
+            workingDirectory project.file('run/server')
+            args '--nogui'
+        }
+
+        gameTestServer {
+            workingDirectory project.file('run/gametest')
+            property 'forge.enabledGameTestNamespaces', mod_id
+        }
+
+        data {
+            workingDirectory project.file('run-data')
+            args '--mod', mod_id, '--all', '--output', file('src/generated/resources/'), '--existing', file('src/main/resources/')
+        }
+    }
+}
+
+sourceSets.main.resources { srcDir 'src/generated/resources' }
+
+repositories {
+    mavenCentral()
+}
+
+configurations {
+    shade
+    lavaPlayerNatives
+    implementation.extendsFrom shade
+}
+
+dependencies {
+    minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+    shade('dev.arbjerg:lavaplayer:2.2.4') {
+        exclude group: 'org.slf4j', module: 'slf4j-api'
+        exclude group: 'org.jetbrains', module: 'annotations'
+    }
+    minecraftLibrary('dev.arbjerg:lavaplayer:2.2.4') {
+        exclude group: 'dev.arbjerg', module: 'lavaplayer-natives'
+        exclude group: 'org.slf4j', module: 'slf4j-api'
+        exclude group: 'org.jetbrains', module: 'annotations'
+        exclude group: 'commons-io', module: 'commons-io'
+        exclude group: 'commons-logging', module: 'commons-logging'
+        exclude group: 'commons-codec', module: 'commons-codec'
+        exclude group: 'org.apache.httpcomponents', module: 'httpclient'
+        exclude group: 'org.apache.httpcomponents', module: 'httpcore'
+    }
+    lavaPlayerNatives('dev.arbjerg:lavaplayer-natives:2.2.4') {
+        transitive = false
+    }
+
+    testImplementation platform('org.junit:junit-bom:5.10.2')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+}
+
+def extractLavaPlayerNatives = tasks.register('extractLavaPlayerNatives', Sync) {
+    from { configurations.lavaPlayerNatives.collect { zipTree(it) } }
+    include 'natives/**'
+    into layout.buildDirectory.dir('lavaplayer-natives')
+}
+
+tasks.matching { it.name == 'runClient' }.configureEach {
+    dependsOn extractLavaPlayerNatives
+}
+
+tasks.named('processResources', ProcessResources).configure {
+    def replaceProperties = [
+            minecraft_version      : minecraft_version,
+            minecraft_version_range: minecraft_version_range,
+            forge_version          : forge_version,
+            forge_version_range    : forge_version_range,
+            loader_version_range   : loader_version_range,
+            mod_id                 : mod_id,
+            mod_name               : mod_name,
+            mod_license            : mod_license,
+            mod_version            : mod_version,
+            mod_authors            : mod_authors,
+            mod_description        : mod_description
+    ]
+    inputs.properties replaceProperties
+
+    filesMatching(['META-INF/mods.toml', 'pack.mcmeta']) {
+        expand replaceProperties + [project: project]
+    }
+}
+
+tasks.named('jar', Jar).configure {
+    archiveClassifier = 'slim'
+    from('LICENSE.txt')
+    manifest {
+        attributes([
+                'Specification-Title'     : mod_id,
+                'Specification-Vendor'    : mod_authors,
+                'Specification-Version'   : '1',
+                'Implementation-Title'    : project.name,
+                'Implementation-Version'  : project.jar.archiveVersion,
+                'Implementation-Vendor'   : mod_authors,
+                'Implementation-Timestamp': new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")
+        ])
+    }
+    finalizedBy 'reobfJar'
+}
+
+tasks.named('shadowJar', com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar).configure {
+    archiveClassifier = ''
+    configurations = [project.configurations.shade]
+    from('LICENSE.txt')
+}
+
+tasks.withType(com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar).configureEach {
+    mergeServiceFiles()
+    relocate 'com.fasterxml.jackson', 'org.techfield.tfmusic.shadow.com.fasterxml.jackson'
+    relocate 'net.iharder', 'org.techfield.tfmusic.shadow.net.iharder'
+    relocate 'org.apache.commons.codec', 'org.techfield.tfmusic.shadow.org.apache.commons.codec'
+    relocate 'org.apache.commons.io', 'org.techfield.tfmusic.shadow.org.apache.commons.io'
+    relocate 'org.apache.commons.logging', 'org.techfield.tfmusic.shadow.org.apache.commons.logging'
+    relocate 'org.apache.http', 'org.techfield.tfmusic.shadow.org.apache.http'
+    relocate 'org.json', 'org.techfield.tfmusic.shadow.org.json'
+    relocate 'org.jsoup', 'org.techfield.tfmusic.shadow.org.jsoup'
+    relocate 'org.mozilla', 'org.techfield.tfmusic.shadow.org.mozilla'
+    exclude 'META-INF/maven/**'
+    exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA'
+}
+
+reobf {
+    shadowJar {}
+}
+
+tasks.named('build').configure {
+    dependsOn tasks.named('reobfShadowJar')
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 17
+}
+
+tasks.named('test', Test).configure {
+    useJUnitPlatform()
+    if (System.getProperty('tfMusicTestAudio') != null) {
+        systemProperty 'tfMusicTestAudio', System.getProperty('tfMusicTestAudio')
+    }
+    if (System.getProperty('tfMusicBiliTest') != null) {
+        systemProperty 'tfMusicBiliTest', System.getProperty('tfMusicBiliTest')
+    }
+}
+
+publishing {
+    publications {
+        register('mavenJava', MavenPublication) {
+            artifact(tasks.named('shadowJar')) {
+                builtBy tasks.named('reobfShadowJar')
+            }
+        }
+    }
+}
