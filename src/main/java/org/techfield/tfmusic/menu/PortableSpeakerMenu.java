@@ -1,5 +1,6 @@
 package org.techfield.tfmusic.menu;
 
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.player.Inventory;
@@ -8,6 +9,7 @@ import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
+import org.techfield.tfmusic.block.entity.MusicPlayerBlockEntity;
 import org.techfield.tfmusic.item.PortableSpeakerData;
 import org.techfield.tfmusic.item.PortableSpeakerItem;
 import org.techfield.tfmusic.music.MusicMedia;
@@ -29,16 +31,22 @@ public final class PortableSpeakerMenu extends AbstractContainerMenu {
 
     private final Inventory playerInventory;
     private final UUID speakerId;
+    private final BlockPos blockPos;
     private final Container speakerInventory;
 
     public PortableSpeakerMenu(int containerId, Inventory playerInventory, FriendlyByteBuf buffer) {
-        this(containerId, playerInventory, buffer.readUUID());
+        this(containerId, playerInventory, buffer.readUUID(), buffer.readBoolean() ? buffer.readBlockPos() : null);
     }
 
     public PortableSpeakerMenu(int containerId, Inventory playerInventory, UUID speakerId) {
+        this(containerId, playerInventory, speakerId, null);
+    }
+
+    public PortableSpeakerMenu(int containerId, Inventory playerInventory, UUID speakerId, @Nullable BlockPos blockPos) {
         super(ModMenus.PORTABLE_SPEAKER.get(), containerId);
         this.playerInventory = playerInventory;
         this.speakerId = speakerId;
+        this.blockPos = blockPos == null ? null : blockPos.immutable();
         this.speakerInventory = new SpeakerContainer();
 
         addSlot(new Slot(speakerInventory, DISC_SLOT, DISC_SLOT_X, DISC_SLOT_Y) {
@@ -60,6 +68,10 @@ public final class PortableSpeakerMenu extends AbstractContainerMenu {
     }
 
     public PortableSpeakerData speakerData() {
+        if (isBlockSpeaker()) {
+            MusicPlayerBlockEntity block = blockSpeaker();
+            return block == null ? PortableSpeakerData.createDefault() : block.speakerData();
+        }
         ItemStack stack = findSpeaker();
         if (stack == null) {
             return PortableSpeakerData.createDefault();
@@ -71,7 +83,27 @@ public final class PortableSpeakerMenu extends AbstractContainerMenu {
 
     @Override
     public boolean stillValid(Player player) {
+        if (isBlockSpeaker()) {
+            MusicPlayerBlockEntity block = blockSpeaker();
+            return block != null && !block.isRemoved() && block.getSpeakerId().equals(speakerId)
+                    && player.distanceToSqr(blockPos.getX() + 0.5D, blockPos.getY() + 0.5D, blockPos.getZ() + 0.5D) <= 64.0D;
+        }
         return PortableSpeakerItem.find(player.getInventory(), speakerId) != null;
+    }
+
+    public boolean isBlockSpeaker() {
+        return blockPos != null;
+    }
+
+    @Nullable
+    public MusicPlayerBlockEntity blockSpeaker() {
+        return blockPos != null && playerInventory.player.level().hasChunkAt(blockPos)
+                && playerInventory.player.level().getBlockEntity(blockPos) instanceof MusicPlayerBlockEntity block
+                ? block : null;
+    }
+
+    public PlaylistEditorTarget playlistTarget() {
+        return isBlockSpeaker() ? PlaylistEditorTarget.block(blockPos) : PlaylistEditorTarget.speaker(speakerId);
     }
 
     @Override
@@ -140,6 +172,10 @@ public final class PortableSpeakerMenu extends AbstractContainerMenu {
             if (playerInventory.player.level().isClientSide) {
                 return clientMedia;
             }
+            if (isBlockSpeaker()) {
+                MusicPlayerBlockEntity block = blockSpeaker();
+                return block == null ? ItemStack.EMPTY : block.getMedia();
+            }
             ItemStack speaker = findSpeaker();
             return speaker == null ? ItemStack.EMPTY : PortableSpeakerData.load(speaker).media().copy();
         }
@@ -172,6 +208,13 @@ public final class PortableSpeakerMenu extends AbstractContainerMenu {
             }
             if (playerInventory.player.level().isClientSide) {
                 clientMedia = MusicMedia.normalize(stack);
+                return;
+            }
+            if (isBlockSpeaker()) {
+                MusicPlayerBlockEntity block = blockSpeaker();
+                if (block != null) {
+                    block.setMedia(stack);
+                }
                 return;
             }
             ItemStack speaker = findSpeaker();

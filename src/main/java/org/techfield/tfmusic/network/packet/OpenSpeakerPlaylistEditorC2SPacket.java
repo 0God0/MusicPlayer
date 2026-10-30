@@ -2,12 +2,8 @@ package org.techfield.tfmusic.network.packet;
 
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.network.NetworkEvent;
-import org.techfield.tfmusic.item.PortableSpeakerData;
-import org.techfield.tfmusic.item.PortableSpeakerItem;
 import org.techfield.tfmusic.menu.PlaylistEditorMenu;
-import org.techfield.tfmusic.menu.PlaylistEditorTarget;
 import org.techfield.tfmusic.menu.PortableSpeakerMenu;
 import org.techfield.tfmusic.music.MusicMedia;
 
@@ -34,9 +30,8 @@ public record OpenSpeakerPlaylistEditorC2SPacket(UUID speakerId) {
                 || !menu.stillValid(sender)) {
             return;
         }
-        ItemStack speaker = PortableSpeakerItem.find(sender.getInventory(), packet.speakerId);
-        if (speaker != null && MusicMedia.isPlaylist(PortableSpeakerData.getOrCreate(speaker).media())) {
-            PlaylistEditorMenu.open(sender, PlaylistEditorTarget.speaker(packet.speakerId));
+        if (MusicMedia.isPlaylist(menu.speakerData().media())) {
+            PlaylistEditorMenu.open(sender, menu.playlistTarget());
         }
     }
 }

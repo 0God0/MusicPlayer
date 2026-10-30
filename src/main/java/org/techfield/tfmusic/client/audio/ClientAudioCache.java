@@ -67,7 +67,7 @@ public final class ClientAudioCache {
                         packet.sampleRate(),
                         resolved.path(),
                         packet.progressMs(),
-                        packet.mode() != SpeakerStartS2CPacket.Mode.OWNER,
+                        !packet.mode().isStereo(),
                         LOAD_TIMEOUT
                 );
                 load.complete(stream);

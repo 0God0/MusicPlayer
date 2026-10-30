@@ -18,7 +18,7 @@ import org.techfield.tfmusic.network.packet.SpeakerStartS2CPacket;
 import org.techfield.tfmusic.network.packet.SpeakerStopS2CPacket;
 
 public final class ModNetwork {
-    private static final String PROTOCOL = "3";
+    private static final String PROTOCOL = "4";
     private static int nextPacketId;
 
     public static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(

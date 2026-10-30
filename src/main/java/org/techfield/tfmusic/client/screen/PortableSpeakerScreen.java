@@ -5,6 +5,7 @@ import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
 import org.techfield.tfmusic.client.ClientSpeakerTracker;
@@ -14,6 +15,7 @@ import org.techfield.tfmusic.music.MusicMedia;
 import org.techfield.tfmusic.music.MusicPlaylist;
 import org.techfield.tfmusic.music.MusicTrack;
 import org.techfield.tfmusic.music.PlaybackMode;
+import org.techfield.tfmusic.music.SoundMode;
 import org.techfield.tfmusic.network.ModNetwork;
 import org.techfield.tfmusic.network.packet.OpenSpeakerPlaylistEditorC2SPacket;
 import org.techfield.tfmusic.network.packet.SpeakerControlC2SPacket;
@@ -53,6 +55,9 @@ public final class PortableSpeakerScreen extends AbstractContainerScreen<Portabl
     private Button nextButton;
     private Button modeButton;
     private Button editButton;
+    private Button soundModeButton;
+    private SoundMode pendingSoundMode;
+    private CompoundTag lastState;
     private final Button[] speedButtons = new Button[SPEEDS.length];
     private ProgressSlider progressSlider;
     private long durationMs;
@@ -75,6 +80,7 @@ public final class PortableSpeakerScreen extends AbstractContainerScreen<Portabl
     protected void init() {
         super.init();
         PortableSpeakerData data = menu.speakerData();
+        lastState = data.save();
         MusicTrack track = data.currentTrack();
         MusicPlaylist playlist = MusicPlaylist.fromStack(data.media()).orElse(null);
         displayedPlaylistId = playlist == null ? null : playlist.id();
@@ -131,6 +137,17 @@ public final class PortableSpeakerScreen extends AbstractContainerScreen<Portabl
                         button -> openPlaylistEditor())
                 .bounds(leftPos + EDIT_BUTTON_X, topPos + MODE_BUTTON_Y, EDIT_BUTTON_WIDTH, 18)
                 .build());
+        soundModeButton = addRenderableWidget(Button.builder(soundModeMessage(data.soundMode()), button -> {
+                    SoundMode target = menu.speakerData().soundMode().next();
+                    pendingSoundMode = target;
+                    soundModeButton.setMessage(soundModeMessage(target));
+                    soundModeButton.active = false;
+                    ModNetwork.sendToServer(new SpeakerControlC2SPacket(
+                            menu.speakerId(), SpeakerControlC2SPacket.Action.SOUND_MODE, 0L, 1.0F, null, target));
+                })
+                .bounds(leftPos + 178, topPos + 77, 46, 20)
+                .tooltip(Tooltip.create(Component.translatable("tooltip.tf_music.sound_mode")))
+                .build());
         updateControls();
     }
 
@@ -150,6 +167,19 @@ public final class PortableSpeakerScreen extends AbstractContainerScreen<Portabl
     @Override
     protected void containerTick() {
         PortableSpeakerData data = menu.speakerData();
+        CompoundTag state = data.save();
+        if (!state.equals(lastState)) {
+            lastState = state;
+            MusicTrack current = data.currentTrack();
+            ClientSpeakerTracker.localSeek(menu.speakerId(), current == null ? 0L : current.durationMs(),
+                    data.progressMs(), data.playing());
+            ClientSpeakerTracker.localSpeed(menu.speakerId(), current == null ? 0L : current.durationMs(), data.speed());
+        }
+        if (pendingSoundMode == null || pendingSoundMode == data.soundMode()) {
+            pendingSoundMode = null;
+            soundModeButton.setMessage(soundModeMessage(data.soundMode()));
+            soundModeButton.active = true;
+        }
         MusicTrack track = data.currentTrack();
         MusicPlaylist playlist = MusicPlaylist.fromStack(data.media()).orElse(null);
         UUID playlistId = playlist == null ? null : playlist.id();
@@ -224,6 +254,7 @@ public final class PortableSpeakerScreen extends AbstractContainerScreen<Portabl
         graphics.drawString(font, playerInventoryTitle, inventoryLabelX, inventoryLabelY, 0xB7C2CC, false);
         graphics.drawString(font, Component.translatable("label.tf_music.speed"), PROGRESS_X, SPEED_LABEL_Y, 0xB7C2CC, false);
         graphics.drawCenteredString(font, Component.translatable("label.tf_music.media"), 201, 27, 0xB7C2CC);
+        graphics.drawCenteredString(font, Component.translatable("label.tf_music.sound_mode"), 201, 66, 0xB7C2CC);
         drawCurrentTrack(graphics);
     }
 
@@ -375,6 +406,10 @@ public final class PortableSpeakerScreen extends AbstractContainerScreen<Portabl
                 "button.tf_music.mode",
                 Component.translatable("mode.tf_music." + displayedMode.serializedName())
         );
+    }
+
+    private Component soundModeMessage(SoundMode mode) {
+        return Component.translatable("sound_mode.tf_music." + mode.serializedName());
     }
 
     private void drawSelectedSpeed(GuiGraphics graphics) {

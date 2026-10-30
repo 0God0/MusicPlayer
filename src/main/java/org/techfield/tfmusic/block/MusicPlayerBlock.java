@@ -1,13 +1,12 @@
 package org.techfield.tfmusic.block;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.SimpleMenuProvider;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BaseEntityBlock;
 import net.minecraft.world.level.block.RenderShape;
@@ -19,11 +18,10 @@ import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
 import net.minecraft.world.phys.BlockHitResult;
+import net.minecraftforge.network.NetworkHooks;
 import org.jetbrains.annotations.Nullable;
 import org.techfield.tfmusic.block.entity.MusicPlayerBlockEntity;
-import org.techfield.tfmusic.menu.PlaylistEditorMenu;
-import org.techfield.tfmusic.menu.PlaylistEditorTarget;
-import org.techfield.tfmusic.music.MusicMedia;
+import org.techfield.tfmusic.menu.PortableSpeakerMenu;
 import org.techfield.tfmusic.registry.ModBlockEntities;
 
 public final class MusicPlayerBlock extends BaseEntityBlock {
@@ -47,27 +45,19 @@ public final class MusicPlayerBlock extends BaseEntityBlock {
             return InteractionResult.PASS;
         }
 
-        ItemStack held = player.getItemInHand(hand);
-        if (level.isClientSide) {
-            return state.getValue(HAS_DISC) || MusicMedia.isSupported(held)
-                    ? InteractionResult.SUCCESS
-                    : InteractionResult.PASS;
+        if (player instanceof ServerPlayer serverPlayer) {
+            playerBlockEntity.ensureSpeakerId();
+            NetworkHooks.openScreen(serverPlayer, new SimpleMenuProvider(
+                    (containerId, inventory, ignored) -> new PortableSpeakerMenu(
+                            containerId, inventory, playerBlockEntity.getSpeakerId(), pos),
+                    Component.translatable("screen.tf_music.music_player")
+            ), buffer -> {
+                buffer.writeUUID(playerBlockEntity.getSpeakerId());
+                buffer.writeBoolean(true);
+                buffer.writeBlockPos(pos);
+            });
         }
-
-        if (state.getValue(HAS_DISC)) {
-            if (player.isShiftKeyDown()
-                    && MusicMedia.isPlaylist(playerBlockEntity.getMedia())
-                    && player instanceof ServerPlayer serverPlayer) {
-                PlaylistEditorMenu.open(serverPlayer, PlaylistEditorTarget.block(pos));
-                return InteractionResult.CONSUME;
-            }
-            playerBlockEntity.ejectMedia();
-            return InteractionResult.CONSUME;
-        }
-        if (MusicMedia.isSupported(held) && playerBlockEntity.insertMedia(held)) {
-            return InteractionResult.CONSUME;
-        }
-        return InteractionResult.PASS;
+        return InteractionResult.sidedSuccess(level.isClientSide);
     }
 
     @Override

@@ -15,11 +15,14 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import org.jetbrains.annotations.Nullable;
 import org.techfield.tfmusic.block.MusicPlayerBlock;
+import org.techfield.tfmusic.item.PortableSpeakerData;
 import org.techfield.tfmusic.music.MusicMedia;
 import org.techfield.tfmusic.music.MusicPlaylist;
 import org.techfield.tfmusic.music.MusicTrack;
 import org.techfield.tfmusic.music.PlaybackCursor;
 import org.techfield.tfmusic.music.PlaybackQueue;
+import org.techfield.tfmusic.music.SoundMode;
+import org.techfield.tfmusic.network.packet.SpeakerControlC2SPacket;
 import org.techfield.tfmusic.registry.ModBlockEntities;
 import org.techfield.tfmusic.server.sound.RangeServerSpeaker;
 
@@ -36,6 +39,7 @@ public final class MusicPlayerBlockEntity extends BlockEntity {
     private PlaybackCursor cursor = PlaybackQueue.initial(ItemStack.EMPTY);
     private float speed = 1.0F;
     private double radius = DEFAULT_RADIUS;
+    private SoundMode soundMode = SoundMode.SPATIAL;
     private int saveTicker;
     private RangeServerSpeaker speaker;
 
@@ -50,35 +54,116 @@ public final class MusicPlayerBlockEntity extends BlockEntity {
         blockEntity.tickPlayback();
     }
 
-    public boolean insertMedia(ItemStack sourceStack) {
-        if (!media.isEmpty() || !MusicMedia.isSupported(sourceStack)) {
-            return false;
+    public void setMedia(ItemStack stack) {
+        if (!stack.isEmpty() && !MusicMedia.isSupported(stack)) {
+            return;
         }
-        ItemStack inserted = MusicMedia.normalize(sourceStack);
-        PlaybackCursor insertedCursor = PlaybackQueue.initial(inserted);
-        MusicTrack track = insertedCursor.track();
-        if (track == null) {
-            return false;
-        }
+        stopSpeaker(false);
+        media = MusicMedia.normalize(stack);
+        cursor = PlaybackQueue.initial(media);
+        playing = false;
+        ensureSpeakerId();
+        updateBlockState(!media.isEmpty());
+        setChangedAndSync();
+    }
 
-        media = inserted;
-        sourceStack.shrink(1);
-        if (level instanceof ServerLevel serverLevel) {
+    public PortableSpeakerData speakerData() {
+        return new PortableSpeakerData(speakerId, media, cursor, speed, playing, radius, soundMode);
+    }
+
+    public void ensureSpeakerId() {
+        if (level instanceof ServerLevel serverLevel && !speakerId.equals(stableSpeakerId(serverLevel))) {
+            stopSpeaker(false);
             speakerId = stableSpeakerId(serverLevel);
-        } else {
-            speakerId = UUID.randomUUID();
+            setChangedAndSync();
         }
-        cursor = insertedCursor;
-        speed = 1.0F;
-        playing = true;
-        speaker = null;
-        if (level instanceof ServerLevel serverLevel) {
-            speaker = createSpeaker(serverLevel, track);
+    }
+
+    public void handleControl(SpeakerControlC2SPacket packet) {
+        if (!(level instanceof ServerLevel serverLevel) || !speakerId.equals(packet.speakerId())) {
+            return;
+        }
+        cursor = PlaybackQueue.synchronize(media, cursor);
+        if (speaker != null) {
+            cursor = cursor.withProgress(speaker.captureProgress());
+        }
+        MusicTrack track = cursor.track();
+        switch (packet.action()) {
+            case PLAY -> {
+                if (track == null) {
+                    return;
+                }
+                playing = true;
+                if (speaker != null) {
+                    speaker.resumeAndNotify();
+                }
+            }
+            case PAUSE -> {
+                stopSpeaker(true);
+                playing = false;
+            }
+            case STOP -> {
+                stopSpeaker(false);
+                playing = false;
+                cursor = PlaybackQueue.initial(media);
+            }
+            case SEEK -> {
+                if (track == null) {
+                    return;
+                }
+                cursor = cursor.withProgress(Math.max(0L, Math.min(track.durationMs(), packet.seekMs())));
+                if (speaker != null) {
+                    speaker.seek(cursor.progressMs());
+                }
+            }
+            case SPEED -> {
+                speed = PortableSpeakerData.sanitizeSpeed(packet.speed());
+                if (speaker != null) {
+                    speaker.setSpeed(speed);
+                }
+            }
+            case NEXT, PREVIOUS -> {
+                stopSpeaker(false);
+                if (packet.action() == SpeakerControlC2SPacket.Action.NEXT) {
+                    PlaybackQueue.AdvanceResult result = PlaybackQueue.advance(media, cursor, true);
+                    cursor = result.cursor();
+                    playing = playing && result.continuePlaying();
+                } else {
+                    cursor = cursor.progressMs() > 3_000L
+                            ? cursor.withProgress(0L) : PlaybackQueue.previous(media, cursor);
+                }
+            }
+            case MODE -> {
+                MusicPlaylist playlist = MusicPlaylist.fromStack(media).orElse(null);
+                if (playlist == null || packet.mode() == null) {
+                    return;
+                }
+                updatePlaylist(playlist.withMode(packet.mode()));
+            }
+            case SOUND_MODE -> {
+                if (packet.soundMode() == null || packet.soundMode() == soundMode) {
+                    return;
+                }
+                stopSpeaker(false);
+                soundMode = packet.soundMode();
+            }
+        }
+        if (playing && cursor.track() != null && speaker == null) {
+            speaker = createSpeaker(serverLevel, cursor.track());
             speaker.tick();
         }
-        updateBlockState(true);
         setChangedAndSync();
-        return true;
+    }
+
+    private void stopSpeaker(boolean pause) {
+        if (speaker != null) {
+            if (pause) {
+                speaker.pauseAndNotify();
+            } else {
+                speaker.stopAndNotify();
+            }
+            speaker = null;
+        }
     }
 
     public ItemStack ejectMedia() {
@@ -121,8 +206,11 @@ public final class MusicPlayerBlockEntity extends BlockEntity {
         if (current == null || !current.id().equals(playlist.id()) || playlist.validate() != null) {
             return false;
         }
-        playlist.write(media);
-        cursor = PlaybackQueue.synchronize(media, cursor);
+        ItemStack editedMedia = media.copy();
+        playlist.write(editedMedia);
+        PortableSpeakerData updated = speakerData().withEditedMedia(editedMedia);
+        media = updated.media();
+        cursor = updated.cursor();
         setChangedAndSync();
         return true;
     }
@@ -157,10 +245,12 @@ public final class MusicPlayerBlockEntity extends BlockEntity {
         tag.put("Cursor", cursor.save());
         tag.putFloat("Speed", speed);
         tag.putDouble("Radius", radius);
+        tag.putString("SoundMode", soundMode.serializedName());
     }
 
     @Override
     public void load(CompoundTag tag) {
+        stopSpeaker(false);
         super.load(tag);
         media = tag.contains("Media", CompoundTag.TAG_COMPOUND)
                 ? ItemStack.of(tag.getCompound("Media"))
@@ -173,14 +263,16 @@ public final class MusicPlayerBlockEntity extends BlockEntity {
                 ? PlaybackCursor.load(tag.getCompound("Cursor"), media)
                 : PlaybackQueue.initial(media).withProgress(tag.getLong("ProgressMs"));
         playing = tag.getBoolean("Playing") && cursor.track() != null;
-        speed = sanitizeSpeed(tag.getFloat("Speed"));
+        speed = tag.contains("Speed") ? PortableSpeakerData.sanitizeSpeed(tag.getFloat("Speed")) : 1.0F;
         radius = sanitizeRadius(tag.getDouble("Radius"));
+        soundMode = SoundMode.fromSerializedName(tag.getString("SoundMode"));
         speaker = null;
     }
 
     @Override
     public void onLoad() {
         super.onLoad();
+        ensureSpeakerId();
         updateBlockState(!media.isEmpty());
     }
 
@@ -258,15 +350,14 @@ public final class MusicPlayerBlockEntity extends BlockEntity {
             if (playing && cursor.track() != null) {
                 speaker = createSpeaker(serverLevel, cursor.track());
                 speaker.tick();
-            } else {
-                setChangedAndSync();
             }
+            setChangedAndSync();
             return;
         }
         cursor = cursor.withProgress(speaker.progressMs());
         if (++saveTicker >= 20) {
             saveTicker = 0;
-            setChanged();
+            setChangedAndSync();
         }
     }
 
@@ -298,12 +389,9 @@ public final class MusicPlayerBlockEntity extends BlockEntity {
                 speed,
                 radius,
                 serverLevel,
-                worldPosition
+                worldPosition,
+                soundMode
         );
-    }
-
-    private static float sanitizeSpeed(float value) {
-        return Float.isFinite(value) && value > 0.0F ? value : 1.0F;
     }
 
     private static double sanitizeRadius(double value) {

@@ -52,16 +52,17 @@ public final class ClientPlaybackManager {
         }
         minecraft.getSoundManager().play(sound);
 
-        if (packet.mode() == SpeakerStartS2CPacket.Mode.OWNER) {
-            ClientSpeakerTracker.onStart(
-                    packet.speakerId(),
-                    packet.track().durationMs(),
-                    packet.progressMs(),
-                    packet.speed()
-            );
-        }
+        ClientSpeakerTracker.onStart(
+                packet.speakerId(),
+                packet.track().durationMs(),
+                packet.progressMs(),
+                packet.speed()
+        );
 
         sound.audioFuture().whenComplete((stream, error) -> minecraft.execute(() -> {
+            if (SOUNDS.get(packet.speakerId()) != sound || sound.isStopped()) {
+                return;
+            }
             if (error == null) {
                 minecraft.gui.setOverlayMessage(
                         Component.translatable("message.tf_music.now_playing", packet.track().name()),
@@ -79,9 +80,7 @@ public final class ClientPlaybackManager {
                     SOUNDS.remove(packet.speakerId());
                     sound.terminate();
                     minecraft.getSoundManager().stop(sound);
-                    if (packet.mode() == SpeakerStartS2CPacket.Mode.OWNER) {
-                        ClientSpeakerTracker.onPause(packet.speakerId());
-                    }
+                    ClientSpeakerTracker.onPause(packet.speakerId());
                 }
             }
         }));
@@ -90,6 +89,22 @@ public final class ClientPlaybackManager {
     public static void pause(UUID speakerId) {
         removeSound(speakerId);
         ClientSpeakerTracker.onPause(speakerId);
+    }
+
+    public static void tick() {
+        var iterator = SOUNDS.entrySet().iterator();
+        while (iterator.hasNext()) {
+            var entry = iterator.next();
+            StreamingSoundInstance sound = entry.getValue();
+            // Also check while the stream is downloading, before the sound engine starts ticking it.
+            sound.tick();
+            if (sound.isStopped()) {
+                sound.terminate();
+                Minecraft.getInstance().getSoundManager().stop(sound);
+                ClientSpeakerTracker.onStop(entry.getKey());
+                iterator.remove();
+            }
+        }
     }
 
     public static void stop(UUID speakerId) {

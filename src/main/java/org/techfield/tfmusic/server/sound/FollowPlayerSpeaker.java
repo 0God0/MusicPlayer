@@ -3,6 +3,7 @@ package org.techfield.tfmusic.server.sound;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import org.techfield.tfmusic.music.MusicTrack;
+import org.techfield.tfmusic.music.SoundMode;
 import org.techfield.tfmusic.network.ModNetwork;
 import org.techfield.tfmusic.network.packet.SpeakerStartS2CPacket;
 
@@ -22,9 +23,10 @@ public final class FollowPlayerSpeaker extends AbstractServerSpeaker {
             long progressMs,
             float speed,
             double radius,
-            ServerPlayer owner
+            ServerPlayer owner,
+            SoundMode soundMode
     ) {
-        super(id, sampleRate, track, progressMs, speed, radius);
+        super(id, sampleRate, track, progressMs, speed, radius, soundMode);
         this.owner = owner;
         this.ownerLevel = owner.serverLevel();
     }
@@ -39,11 +41,16 @@ public final class FollowPlayerSpeaker extends AbstractServerSpeaker {
 
     @Override
     protected ServerLevel level() {
-        return owner.serverLevel();
+        return ownerLevel;
     }
 
     @Override
     protected Collection<ServerPlayer> findListeners() {
+        if (soundMode == SoundMode.GLOBAL) {
+            List<ServerPlayer> players = new ArrayList<>(SpeakerSourceTracking.listeners(owner));
+            players.add(owner);
+            return players;
+        }
         ServerLevel level = level();
         double packetRadius = radius + 32.0D;
         double radiusSquared = packetRadius * packetRadius;
@@ -64,6 +71,7 @@ public final class FollowPlayerSpeaker extends AbstractServerSpeaker {
                     sampleRate,
                     progressMs,
                     speed,
+                    owner.getId(),
                     track
             ));
         } else {
@@ -74,8 +82,14 @@ public final class FollowPlayerSpeaker extends AbstractServerSpeaker {
                     speed,
                     radius,
                     owner.getId(),
-                    track
+                    track,
+                    soundMode
             ));
         }
+    }
+
+    @Override
+    protected Object trackingSource() {
+        return owner;
     }
 }

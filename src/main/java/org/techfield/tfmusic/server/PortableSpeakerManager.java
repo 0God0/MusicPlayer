@@ -148,6 +148,19 @@ public final class PortableSpeakerManager {
                 updatedPlaylist.write(editedMedia);
                 data.withEditedMedia(editedMedia).write(stack);
             }
+            case SOUND_MODE -> {
+                if (packet.soundMode() == null || packet.soundMode() == data.soundMode()) {
+                    return;
+                }
+                FollowPlayerSpeaker speaker = ACTIVE.get(data.speakerId());
+                long progress = speaker == null ? data.progressMs() : speaker.captureProgress();
+                PortableSpeakerData updated = data.withPlayback(progress, data.speed(), data.playing())
+                        .withSoundMode(packet.soundMode());
+                updated.write(stack);
+                if (updated.playing() && track != null) {
+                    startOrReplace(player, stack, updated, track);
+                }
+            }
         }
         player.getInventory().setChanged();
     }
@@ -322,7 +335,8 @@ public final class PortableSpeakerManager {
                 clampProgress(data.progressMs(), track.durationMs()),
                 data.speed(),
                 data.radius(),
-                player
+                player,
+                data.soundMode()
         );
     }
 
@@ -366,7 +380,8 @@ public final class PortableSpeakerManager {
                 PlaybackQueue.initial(data.media()),
                 data.speed(),
                 false,
-                data.radius()
+                data.radius(),
+                data.soundMode()
         );
         replaced.write(stack);
         usedIds.add(replaced.speakerId());

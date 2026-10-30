@@ -12,4 +12,12 @@ plugins {
     id 'org.gradle.toolchains.foojay-resolver-convention' version '0.8.0'
 }
 
+if (JavaVersion.current() != JavaVersion.VERSION_17) {
+    throw new GradleException(
+            "This Forge 1.20.1 project requires Gradle to run on JDK 17 (current: ${JavaVersion.current()}). " +
+                    'Install JDK 17 and select it as the IDE Gradle JVM, then use the Gradle wrapper. ' +
+                    'See README.md for first-build instructions.'
+    )
+}
+
 rootProject.name = 'MusicPlayer'

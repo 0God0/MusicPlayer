@@ -9,6 +9,7 @@ import org.techfield.tfmusic.music.MusicPlaylist;
 import org.techfield.tfmusic.music.MusicTrack;
 import org.techfield.tfmusic.music.PlaybackCursor;
 import org.techfield.tfmusic.music.PlaybackQueue;
+import org.techfield.tfmusic.music.SoundMode;
 
 import java.util.UUID;
 
@@ -18,7 +19,8 @@ public record PortableSpeakerData(
         PlaybackCursor cursor,
         float speed,
         boolean playing,
-        double radius
+        double radius,
+        SoundMode soundMode
 ) {
     public static final double DEFAULT_RADIUS = 64.0D;
     public static final double MAX_RADIUS = 128.0D;
@@ -32,6 +34,7 @@ public record PortableSpeakerData(
         cursor = cursor == null ? PlaybackQueue.initial(media) : PlaybackQueue.synchronize(media, cursor);
         speed = sanitizeSpeed(speed);
         radius = sanitizeRadius(radius);
+        soundMode = soundMode == null ? SoundMode.SPATIAL : soundMode;
         playing = playing && cursor.track() != null;
     }
 
@@ -43,7 +46,8 @@ public record PortableSpeakerData(
                 PlaybackQueue.initial(media),
                 1.0F,
                 false,
-                DEFAULT_RADIUS
+                DEFAULT_RADIUS,
+                SoundMode.SPATIAL
         );
     }
 
@@ -57,6 +61,7 @@ public record PortableSpeakerData(
         tag.putFloat("Speed", sanitizeSpeed(speed));
         tag.putBoolean("Playing", playing);
         tag.putDouble("Radius", sanitizeRadius(radius));
+        tag.putString("SoundMode", soundMode.serializedName());
         return tag;
     }
 
@@ -85,7 +90,8 @@ public record PortableSpeakerData(
                 cursor,
                 tag.contains("Speed", Tag.TAG_FLOAT) ? sanitizeSpeed(tag.getFloat("Speed")) : 1.0F,
                 tag.contains("Playing", Tag.TAG_BYTE) && tag.getBoolean("Playing"),
-                tag.contains("Radius", Tag.TAG_DOUBLE) ? sanitizeRadius(tag.getDouble("Radius")) : DEFAULT_RADIUS
+                tag.contains("Radius", Tag.TAG_DOUBLE) ? sanitizeRadius(tag.getDouble("Radius")) : DEFAULT_RADIUS,
+                SoundMode.fromSerializedName(tag.getString("SoundMode"))
         );
         return loaded;
     }
@@ -117,7 +123,8 @@ public record PortableSpeakerData(
                 PlaybackQueue.initial(normalized),
                 speed,
                 false,
-                radius
+                radius,
+                soundMode
         );
     }
 
@@ -137,7 +144,8 @@ public record PortableSpeakerData(
                 synchronizedCursor,
                 speed,
                 playing,
-                radius
+                radius,
+                soundMode
         );
     }
 
@@ -148,12 +156,17 @@ public record PortableSpeakerData(
                 newCursor,
                 sanitizeSpeed(newSpeed),
                 newPlaying,
-                sanitizeRadius(radius)
+                sanitizeRadius(radius),
+                soundMode
         );
     }
 
     public PortableSpeakerData withPlayback(long newProgress, float newSpeed, boolean newPlaying) {
         return withPlayback(cursor.withProgress(newProgress), newSpeed, newPlaying);
+    }
+
+    public PortableSpeakerData withSoundMode(SoundMode newMode) {
+        return new PortableSpeakerData(speakerId, media, cursor, speed, playing, radius, newMode);
     }
 
     public long progressMs() {

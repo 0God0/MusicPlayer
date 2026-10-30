@@ -32,13 +32,7 @@ public final class ClientSpeakerTracker {
     }
 
     public static void onStop(UUID id) {
-        State state = STATES.get(id);
-        if (state == null) {
-            return;
-        }
-        state.progressMs = 0L;
-        state.playing = false;
-        state.lastUpdateMs = System.currentTimeMillis();
+        STATES.remove(id);
     }
 
     public static void localPlay(UUID id, long durationMs, long progressMs, float speed) {

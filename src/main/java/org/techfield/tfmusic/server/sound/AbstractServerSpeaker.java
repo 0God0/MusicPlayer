@@ -3,6 +3,7 @@ package org.techfield.tfmusic.server.sound;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import org.techfield.tfmusic.music.MusicTrack;
+import org.techfield.tfmusic.music.SoundMode;
 import org.techfield.tfmusic.network.ModNetwork;
 import org.techfield.tfmusic.network.packet.SpeakerPauseS2CPacket;
 import org.techfield.tfmusic.network.packet.SpeakerStopS2CPacket;
@@ -18,6 +19,7 @@ public abstract class AbstractServerSpeaker {
     protected final UUID id;
     protected final int sampleRate;
     protected final MusicTrack track;
+    protected final SoundMode soundMode;
     protected final Set<ServerPlayer> listeners = new HashSet<>();
 
     protected float speed;
@@ -35,11 +37,13 @@ public abstract class AbstractServerSpeaker {
             MusicTrack track,
             long progressMs,
             float speed,
-            double radius
+            double radius,
+            SoundMode soundMode
     ) {
         this.id = id;
         this.sampleRate = sampleRate;
         this.track = track;
+        this.soundMode = soundMode;
         this.progressMs = clampProgress(progressMs);
         this.speed = sanitizeSpeed(speed);
         this.radius = sanitizeRadius(radius);
@@ -48,6 +52,9 @@ public abstract class AbstractServerSpeaker {
     public boolean tick() {
         if (!working) {
             return false;
+        }
+        if (soundMode == SoundMode.GLOBAL) {
+            SpeakerSourceTracking.add(this);
         }
         updateProgress();
         if (progressMs >= track.durationMs()) {
@@ -68,6 +75,7 @@ public abstract class AbstractServerSpeaker {
         }
         updateProgress();
         paused = true;
+        SpeakerSourceTracking.remove(this);
         forEachListener(player -> ModNetwork.sendTo(player, new SpeakerPauseS2CPacket(id)));
     }
 
@@ -77,6 +85,9 @@ public abstract class AbstractServerSpeaker {
         }
         paused = false;
         lastTickNanos = System.nanoTime();
+        if (soundMode == SoundMode.GLOBAL) {
+            SpeakerSourceTracking.add(this);
+        }
         refreshListeners(true);
     }
 
@@ -85,6 +96,7 @@ public abstract class AbstractServerSpeaker {
             return;
         }
         working = false;
+        SpeakerSourceTracking.remove(this);
         paused = false;
         forEachListener(player -> ModNetwork.sendTo(player, new SpeakerStopS2CPacket(id)));
         listeners.clear();
@@ -142,6 +154,8 @@ public abstract class AbstractServerSpeaker {
     }
 
     protected abstract ServerLevel level();
+
+    protected abstract Object trackingSource();
 
     protected abstract Collection<ServerPlayer> findListeners();
 

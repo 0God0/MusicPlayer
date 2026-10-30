@@ -6,27 +6,34 @@ import net.minecraft.client.resources.sounds.Sound;
 import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.client.sounds.AudioStream;
 import net.minecraft.client.sounds.SoundBufferLibrary;
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Entity;
+import org.techfield.tfmusic.block.entity.MusicPlayerBlockEntity;
 import org.techfield.tfmusic.network.packet.SpeakerStartS2CPacket;
 import org.techfield.tfmusic.registry.ModSounds;
 
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 public final class StreamingSoundInstance extends AbstractTickableSoundInstance {
     private final SpeakerStartS2CPacket.Mode mode;
     private final int ownerEntityId;
+    private final BlockPos sourcePos;
+    private final UUID speakerId;
     private final ClientAudioCache.AudioLoad audioLoad;
 
     public StreamingSoundInstance(SpeakerStartS2CPacket packet) {
         super(ModSounds.STREAM.get(), net.minecraft.sounds.SoundSource.RECORDS, SoundInstance.createUnseededRandom());
         this.mode = packet.mode();
         this.ownerEntityId = packet.ownerEntityId();
+        this.sourcePos = packet.pos();
+        this.speakerId = packet.speakerId();
         this.audioLoad = ClientAudioCache.load(packet);
         this.pitch = packet.speed();
         this.looping = false;
         this.delay = 0;
 
-        if (mode == SpeakerStartS2CPacket.Mode.OWNER) {
+        if (mode.isStereo()) {
             this.attenuation = SoundInstance.Attenuation.NONE;
             this.relative = true;
             this.volume = 1.0F;
@@ -37,7 +44,7 @@ public final class StreamingSoundInstance extends AbstractTickableSoundInstance 
             this.attenuation = SoundInstance.Attenuation.LINEAR;
             this.relative = false;
             this.volume = (float) (packet.radius() / 16.0D);
-            if (mode == SpeakerStartS2CPacket.Mode.RANGE) {
+            if (mode.isBlockSource()) {
                 this.x = packet.pos().getX() + 0.5D;
                 this.y = packet.pos().getY() + 0.5D;
                 this.z = packet.pos().getZ() + 0.5D;
@@ -58,8 +65,29 @@ public final class StreamingSoundInstance extends AbstractTickableSoundInstance 
 
     @Override
     public void tick() {
-        if (mode == SpeakerStartS2CPacket.Mode.FOLLOW && !updateOwnerPosition()) {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.level == null) {
             terminate();
+            return;
+        }
+        if (mode == SpeakerStartS2CPacket.Mode.RANGE) {
+            return;
+        }
+        if (mode == SpeakerStartS2CPacket.Mode.GLOBAL_RANGE) {
+            if (!minecraft.level.hasChunkAt(sourcePos)
+                    || !(minecraft.level.getBlockEntity(sourcePos) instanceof MusicPlayerBlockEntity block)
+                    || block.isRemoved() || !block.getSpeakerId().equals(speakerId)) {
+                terminate();
+            }
+        } else if (mode == SpeakerStartS2CPacket.Mode.FOLLOW) {
+            if (!updateOwnerPosition()) {
+                terminate();
+            }
+        } else {
+            Entity owner = minecraft.level.getEntity(ownerEntityId);
+            if (owner == null || owner.isRemoved()) {
+                terminate();
+            }
         }
     }
 

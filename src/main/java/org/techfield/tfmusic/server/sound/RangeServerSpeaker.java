@@ -3,7 +3,9 @@ package org.techfield.tfmusic.server.sound;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.ChunkPos;
 import org.techfield.tfmusic.music.MusicTrack;
+import org.techfield.tfmusic.music.SoundMode;
 import org.techfield.tfmusic.network.ModNetwork;
 import org.techfield.tfmusic.network.packet.SpeakerStartS2CPacket;
 
@@ -22,9 +24,10 @@ public final class RangeServerSpeaker extends AbstractServerSpeaker {
             float speed,
             double radius,
             ServerLevel level,
-            BlockPos pos
+            BlockPos pos,
+            SoundMode soundMode
     ) {
-        super(id, sampleRate, track, progressMs, speed, radius);
+        super(id, sampleRate, track, progressMs, speed, radius, soundMode);
         this.level = level;
         this.pos = pos.immutable();
     }
@@ -36,6 +39,9 @@ public final class RangeServerSpeaker extends AbstractServerSpeaker {
 
     @Override
     protected Collection<ServerPlayer> findListeners() {
+        if (soundMode == SoundMode.GLOBAL) {
+            return SpeakerSourceTracking.listeners(trackingSource());
+        }
         double packetRadius = radius + 32.0D;
         double radiusSquared = packetRadius * packetRadius;
         return level.players().stream()
@@ -55,7 +61,13 @@ public final class RangeServerSpeaker extends AbstractServerSpeaker {
                 speed,
                 radius,
                 pos,
-                track
+                track,
+                soundMode
         ));
+    }
+
+    @Override
+    protected Object trackingSource() {
+        return new SpeakerSourceTracking.BlockSource(level, new ChunkPos(pos));
     }
 }

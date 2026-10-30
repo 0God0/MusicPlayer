@@ -7,6 +7,7 @@ import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.network.NetworkEvent;
 import org.techfield.tfmusic.client.ClientPacketHandler;
 import org.techfield.tfmusic.music.MusicTrack;
+import org.techfield.tfmusic.music.SoundMode;
 
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -25,7 +26,17 @@ public record SpeakerStartS2CPacket(
     public enum Mode {
         RANGE,
         OWNER,
-        FOLLOW
+        FOLLOW,
+        GLOBAL_RANGE,
+        GLOBAL_FOLLOW;
+
+        public boolean isStereo() {
+            return this == OWNER || this == GLOBAL_RANGE || this == GLOBAL_FOLLOW;
+        }
+
+        public boolean isBlockSource() {
+            return this == RANGE || this == GLOBAL_RANGE;
+        }
     }
 
     public static SpeakerStartS2CPacket range(
@@ -35,10 +46,12 @@ public record SpeakerStartS2CPacket(
             float speed,
             double radius,
             BlockPos pos,
-            MusicTrack track
+            MusicTrack track,
+            SoundMode soundMode
     ) {
         return new SpeakerStartS2CPacket(
-                Mode.RANGE, speakerId, sampleRate, progressMs, speed, radius, pos, -1, track
+                soundMode == SoundMode.GLOBAL ? Mode.GLOBAL_RANGE : Mode.RANGE,
+                speakerId, sampleRate, progressMs, speed, radius, pos, -1, track
         );
     }
 
@@ -47,10 +60,11 @@ public record SpeakerStartS2CPacket(
             int sampleRate,
             long progressMs,
             float speed,
+            int ownerEntityId,
             MusicTrack track
     ) {
         return new SpeakerStartS2CPacket(
-                Mode.OWNER, speakerId, sampleRate, progressMs, speed, 16.0D, BlockPos.ZERO, -1, track
+                Mode.OWNER, speakerId, sampleRate, progressMs, speed, 16.0D, BlockPos.ZERO, ownerEntityId, track
         );
     }
 
@@ -61,10 +75,12 @@ public record SpeakerStartS2CPacket(
             float speed,
             double radius,
             int ownerEntityId,
-            MusicTrack track
+            MusicTrack track,
+            SoundMode soundMode
     ) {
         return new SpeakerStartS2CPacket(
-                Mode.FOLLOW, speakerId, sampleRate, progressMs, speed, radius, BlockPos.ZERO, ownerEntityId, track
+                soundMode == SoundMode.GLOBAL ? Mode.GLOBAL_FOLLOW : Mode.FOLLOW,
+                speakerId, sampleRate, progressMs, speed, radius, BlockPos.ZERO, ownerEntityId, track
         );
     }
 

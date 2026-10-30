@@ -41,7 +41,10 @@ public final class PortableSpeakerItem extends Item {
                                     new PortableSpeakerMenu(containerId, inventory, data.speakerId()),
                             Component.translatable("screen.tf_music.portable_speaker")
                     ),
-                    buffer -> buffer.writeUUID(data.speakerId())
+                    buffer -> {
+                        buffer.writeUUID(data.speakerId());
+                        buffer.writeBoolean(false);
+                    }
             );
         }
         return InteractionResultHolder.sidedSuccess(stack, level.isClientSide);
